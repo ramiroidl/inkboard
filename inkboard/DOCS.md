@@ -1,18 +1,27 @@
 # Inkboard
 
-Inkboard renders calendars and Home Assistant data into 800×480 black-and-white
+Inkboard renders calendar, To Do, and Home Assistant widgets into 800×480 black-and-white
 images for the Seeed TRMNL 7.5-inch (OG) DIY Kit running the Inkboard ESPHome
 firmware.
 
 ## How it works
 
-- **Inkboard page** (sidebar): build screens, choose calendars, and set rotation,
+- **Inkboard page** (sidebar): build screens, configure each widget instance, and set rotation,
   schedules, and quiet hours. It is served through Home Assistant ingress, so
   only signed-in Home Assistant users can open it.
 - **Device port 8100**: the display downloads images and reports its status
   here. This port serves only device endpoints and requires the device token.
 - **Home Assistant data**: calendars and entity values are read through the
   Supervisor. No long-lived access token is needed.
+- **Widgets**: all content screens use the same self-contained plugins. The
+  controller stores each instance's settings, loads its selected data, and renders
+  the image. The firmware never needs calendar, To Do, or widget configuration.
+- **Display updates**: the device initiates image requests and status check-ins
+  over Wi-Fi. Inkboard does not push to a sleeping device. Check-in responses
+  tell it when to wake next; its e-paper panel keeps the image while asleep.
+
+See the [architecture diagram in the repository README](https://github.com/ramiroidl/inkboard#how-the-app-works)
+for the complete data flow and standalone Docker alternative.
 
 ## Installation
 
@@ -35,7 +44,7 @@ public avoids both steps.
 
 ## Connect the display
 
-The **Display setup** card on the Inkboard page shows the two values the
+Expand **Connections** on the Inkboard page. **Display setup** shows the two values the
 firmware needs. Put them in the firmware's `secrets.yaml`:
 
 ```yaml
@@ -45,7 +54,9 @@ inkboard_device_api_token: "<token shown on the Inkboard page>"
 
 Use your Home Assistant host's LAN IP address; the display may not resolve
 `homeassistant.local`. Then install the firmware with ESPHome Device Builder,
-first over USB and later over Wi-Fi. The repository README at
+first over USB and later over Wi-Fi. Do not use the sidebar's ingress URL as
+the firmware's controller URL: the display uses the separate LAN device port.
+The repository README at
 <https://github.com/ramiroidl/inkboard> walks through every step.
 
 ## Options
@@ -62,12 +73,32 @@ first over USB and later over Wi-Fi. The repository README at
 
 To show Microsoft To Do tasks, register an app in Microsoft Entra with personal
 accounts and **Allow public client flows** enabled, then enter its client ID
-and select **Sign in with Microsoft** on the Inkboard page. See the repository
-README for the steps. Add **Calendar** and **To Do** to **Automatic rotation**
-to switch between them.
+and select **Sign in with Microsoft** under **Connections**. See the repository
+README for the steps.
 
 To change the device port, edit the port under the App's **Network** section and
 update `inkboard_controller_url` in the firmware.
+
+## Screens and widget settings
+
+Select **New screen**, add widgets, and configure each instance next to its live
+preview. In **Calendar agenda** and **Month calendar**, tick the calendars for
+that instance. In **To Do list**, tick its lists and choose task count, due-date,
+and list-name options. Another widget, even on the same screen, has independent
+settings. Leaving every source unticked shows no events or tasks.
+
+Connections and sign-ins are shared, but calendar and list selections are not.
+There are no fixed-layout content screens to customize first: use **Edit** on
+any content screen. Existing Calendar and To Do screens migrate automatically,
+including selections that previously came from page-wide settings. Rotation,
+schedules, and display assignments are preserved. Deleting a migrated screen
+does not recreate it.
+
+Infrequently changed settings are collapsed by default: **Connections**,
+**Automatic rotation**, **Schedules**, **Quiet hours**, **Backup and restore**,
+and each display's **Device details and display settings**. The current-screen
+selector remains visible. Expand **Display diagnostics** below the screen list
+to hide the test pattern; it remains a fallback if no other screen exists.
 
 ## Data and backups
 
@@ -77,12 +108,19 @@ rendered images are stored in the App's data folder. Home Assistant backups
 include them. Backups stop the App briefly so the database is copied in a
 consistent state.
 
+For portable screen settings, expand **Backup and restore** on the Inkboard
+page. **Export** includes each widget's settings, rotation, schedules, quiet
+hours, and test-pattern visibility, but no credentials or sign-ins. The App exports
+version 2 files and also accepts version 1 imports, converting inherited
+selections into per-instance settings. Connect the sources separately after importing.
+
 ## Moving from the standalone Docker container
 
 The App starts with empty settings. To keep your display working without
 reflashing, set the **Device token** option to the token your firmware already
 uses, then change only `inkboard_controller_url` in the firmware to the App's
-device port. Then sign in to Microsoft To Do on the Inkboard page if you use
-it, select **Export** in the **Backup** card of the old controller, and
-**Import** the file on the new one. That brings over your custom screens,
-rotation, schedules, quiet hours, and calendar and To Do list selections.
+device port. Expand **Backup and restore** on the old controller and select
+**Export**, then **Import** the file on the new one. That brings over your
+screens with their widget settings, rotation, schedules, quiet hours, and
+test-pattern visibility. Sign in to Microsoft To Do under **Connections** if
+you use it; sign-ins are not part of this export.

@@ -116,6 +116,7 @@ export async function buildApp(
     now,
     todoService,
   );
+  screenService.initialize();
 
   app.addHook("onClose", async () => {
     database.close();
@@ -132,9 +133,7 @@ export async function buildApp(
     }),
   );
   await app.register(microsoftTodoRoutes(todoService));
-  await app.register(
-    backupRoutes(new BackupService(screenService, calendarService, todoService, now)),
-  );
+  await app.register(backupRoutes(new BackupService(screenService, now)));
   await app.register(
     deviceRoutes(screenService, database, config.deviceApiToken, now, displaySettings),
   );

@@ -200,12 +200,15 @@ export class CalendarService {
     const requested = [...new Set(entityIds ?? [])]
       .filter((entityId) => CALENDAR_ENTITY_PATTERN.test(entityId))
       .slice(0, MAX_SELECTED_CALENDARS);
-    if (requested.length === 0) {
+    if (entityIds === undefined) {
       if (this.selection.length === 0) {
         return [];
       }
       await this.refreshIfDue();
       return this.mergedEvents();
+    }
+    if (requested.length === 0) {
+      return [];
     }
 
     if (requested.some((entityId) => this.selection.includes(entityId))) {
@@ -300,7 +303,7 @@ export class CalendarService {
     const requested = [...new Set(entityIds ?? [])]
       .filter((entityId) => CALENDAR_ENTITY_PATTERN.test(entityId))
       .slice(0, MAX_SELECTED_CALENDARS);
-    const calendars = requested.length > 0 ? requested : [...this.selection];
+    const calendars = entityIds === undefined ? [...this.selection] : requested;
     if (calendars.length === 0 || !(end.getTime() > start.getTime())) {
       return [];
     }

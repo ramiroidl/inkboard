@@ -11,7 +11,7 @@ import { createWidgetRegistry, discoverWidgets, WidgetRegistry } from "./registr
 import { renderScreenSvg } from "./render.js";
 import { defineWidget, svgText, Type } from "./sdk.js";
 import { createTestServices, renderWidgetForTest } from "./testing.js";
-import type { WidgetDefinition } from "./types.js";
+import type { WidgetDefinition, WidgetServices } from "./types.js";
 
 const directories: string[] = [];
 
@@ -19,7 +19,7 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((d) => rm(d, { recursive: true, force: true })));
 });
 
-const BUILT_IN = [
+const WIDGET_TYPES = [
   "calendar",
   "calendar_month",
   "datetime",
@@ -31,9 +31,9 @@ const BUILT_IN = [
 ];
 
 describe("widget discovery", () => {
-  it("discovers every built-in widget folder", async () => {
+  it("discovers every widget folder using the same plugin contract", async () => {
     const definitions = await discoverWidgets();
-    expect(definitions.map((definition) => definition.type)).toEqual(BUILT_IN);
+    expect(definitions.map((definition) => definition.type)).toEqual(WIDGET_TYPES);
   });
 
   it("skips drafts and folders without an entry point and checks folder names", async () => {
@@ -58,7 +58,7 @@ describe("widget discovery", () => {
 });
 
 describe("widget conformance", () => {
-  it.each(BUILT_IN)("%s renders its default settings", async (type) => {
+  it.each(WIDGET_TYPES)("%s renders its default settings", async (type) => {
     const registry = await createWidgetRegistry();
     const definition = registry.get(type)!;
     const result = await renderWidgetForTest(definition);
@@ -290,6 +290,52 @@ describe("fetchJson service", () => {
 });
 
 describe("list widgets", () => {
+  it("passes each instance's selection, including empty selections, to its source", async () => {
+    const registry = await createWidgetRegistry();
+    const getEvents = vi.fn<WidgetServices["calendar"]["getEvents"]>(async () => []);
+    const getEventsBetween = vi.fn<WidgetServices["calendar"]["getEventsBetween"]>(async () => []);
+    const getTasks = vi.fn<WidgetServices["todo"]["getTasks"]>(async () => []);
+    const services = createTestServices({
+      calendar: { configured: true, getEvents, getEventsBetween },
+      todo: { configured: true, getTasks },
+    });
+    for (const calendars of [undefined, [], ["calendar.family"], ["calendar.work"]]) {
+      for (const type of ["calendar", "calendar_month"]) {
+        const definition = registry.get(type)!;
+        const config = { ...definition.defaultConfig };
+        if (calendars === undefined) {
+          delete config.calendars;
+        } else {
+          config.calendars = calendars;
+        }
+        await renderWidgetForTest(definition, config, services);
+      }
+    }
+    expect(getEvents.mock.calls.map(([ids]) => ids)).toEqual([
+      [],
+      [],
+      ["calendar.family"],
+      ["calendar.work"],
+    ]);
+    expect(getEventsBetween.mock.calls.map((args) => args[2])).toEqual([
+      [],
+      [],
+      ["calendar.family"],
+      ["calendar.work"],
+    ]);
+    for (const lists of [undefined, [], ["groceries"], ["tasks"]]) {
+      const definition = registry.get("todo")!;
+      const config = { ...definition.defaultConfig };
+      if (lists === undefined) {
+        delete config.lists;
+      } else {
+        config.lists = lists;
+      }
+      await renderWidgetForTest(definition, config, services);
+    }
+    expect(getTasks.mock.calls.map(([ids]) => ids)).toEqual([[], [], ["groceries"], ["tasks"]]);
+  });
+
   it("show as many rows as fit instead of being left out", async () => {
     const registry = await createWidgetRegistry();
     const tasks = Array.from({ length: 12 }, (_, index) => ({

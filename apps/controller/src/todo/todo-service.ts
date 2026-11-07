@@ -381,12 +381,15 @@ export class TodoService {
     const requested = [...new Set(listIds ?? [])]
       .filter((listId) => listId !== "" && listId.length <= 512)
       .slice(0, MAX_SELECTED_LISTS);
-    if (requested.length === 0) {
+    if (listIds === undefined) {
       if (!this.isAvailable()) {
         return [];
       }
       await this.refreshIfDue();
       return this.mergedTasks();
+    }
+    if (requested.length === 0) {
+      return [];
     }
     if (!this.isConnected()) {
       return [];

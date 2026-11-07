@@ -213,13 +213,20 @@ describe("Home Assistant calendar selection", () => {
       lastError: null,
     });
 
-    // Clearing the selection removes the Calendar screen.
+    // Legacy selection changes no longer remove or reconfigure persisted screens.
     const cleared = await app.inject({
       method: "PUT",
       url: "/api/v1/admin/calendars",
       payload: { entityIds: [] },
     });
     expect(cleared.json()).toMatchObject({ configured: false, state: "disabled" });
+    const persisted = await app.inject({ method: "GET", url: "/api/v1/admin/screens/calendar" });
+    expect(persisted.json()).toMatchObject({
+      widgets: [
+        { type: "datetime" },
+        { type: "calendar", calendars: ["calendar.family", "calendar.work"] },
+      ],
+    });
     await app.close();
   });
 
@@ -289,7 +296,7 @@ describe("Home Assistant calendar selection", () => {
     const titles = async (entityIds?: string[]) =>
       (await service.getEvents(entityIds)).map((item) => item.title);
     expect(await titles()).toEqual(["Grandparents visit", "School pickup"]);
-    expect(await titles([])).toEqual(["Grandparents visit", "School pickup"]);
+    expect(await titles([])).toEqual([]);
     expect(await titles(["calendar.work"])).toEqual(["Standup", "School pickup"]);
     expect(await titles(["calendar.work", "calendar.family", "sensor.x"])).toEqual([
       "Grandparents visit",
@@ -320,6 +327,7 @@ describe("Home Assistant calendar selection", () => {
     ha.down.clear();
     const monthStart = new Date("2026-10-31T00:00:00Z");
     const monthEnd = new Date("2026-12-02T00:00:00Z");
+    expect(await service.getEventsBetween(monthStart, monthEnd, [])).toEqual([]);
     const rangeRequests = () =>
       ha.fetchImplementation.mock.calls
         .map(([input]) => new URL(input instanceof Request ? input.url : String(input)))

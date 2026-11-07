@@ -1,32 +1,112 @@
 # Inkboard
 
 Local e-paper dashboards for the Seeed Studio **TRMNL 7.5" (OG) DIY Kit**.
-Inkboard runs as a Home Assistant App that renders 800×480 black-and-white
-screens, such as your calendar or a Microsoft To Do list, and the display runs
-a small ESPHome firmware that downloads the current screen and sleeps.
+Inkboard runs as a Home Assistant App or standalone Docker service that renders
+800×480 black-and-white screens, such as your calendar or a Microsoft To Do list.
+The display runs a small ESPHome firmware that downloads the current screen and sleeps.
 
 - Calendar agendas and a whole-month calendar from your Home Assistant calendars
 - Microsoft To Do lists, read-only, with personal or work accounts
-- Custom screens built from widgets: headings, text, dates, Home Assistant
-  values, agendas, and task lists
+- Editable screens built from self-contained widgets: headings, text, dates,
+  Home Assistant values, agendas, and task lists
 - Screen rotation, time-of-day schedules, and quiet hours
 - Buttons on the display to switch screens, and battery-friendly deep sleep
 - Everything stays on your network; nothing is sent to a cloud service except
-  Microsoft Graph when you connect To Do, and Open-Meteo when you turn on the
+  Microsoft identity and Graph when you connect To Do, and Open-Meteo when you turn on the
   month calendar's weather
 
 ## Contents
 
-1. [What you need](#what-you-need)
-2. [Install the Inkboard App](#1-install-the-inkboard-app)
-3. [Assemble the display](#2-assemble-the-display)
-4. [Install the firmware](#3-install-the-firmware)
-5. [Check that it works](#4-check-that-it-works)
-6. [Set up your screens](#5-set-up-your-screens)
-7. [Save battery](#6-save-battery)
-8. [Update](#update)
-9. [Troubleshooting](#troubleshooting)
-10. [Privacy and security](#privacy-and-security)
+1. [How the app works](#how-the-app-works)
+2. [What you need](#what-you-need)
+3. [Install the Inkboard App](#1-install-the-inkboard-app)
+4. [Assemble the display](#2-assemble-the-display)
+5. [Install the firmware](#3-install-the-firmware)
+6. [Check that it works](#4-check-that-it-works)
+7. [Set up your screens](#5-set-up-your-screens)
+8. [Save battery](#6-save-battery)
+9. [Update](#update)
+10. [Troubleshooting](#troubleshooting)
+11. [Privacy and security](#privacy-and-security)
+
+## How the app works
+
+Inkboard has two parts: a **controller on an always-on host** and a **thin
+ESPHome client on the display**. Host the same controller either as a Home
+Assistant App or as a standalone Docker container. The controller owns data
+connections, widget settings, scheduling, and rendering; the display only
+downloads images, refreshes its panel, reports status, and sleeps.
+
+```mermaid
+flowchart TB
+    Browser["Your browser"]
+    Ingress["Home Assistant App<br/>Signed-in Home Assistant ingress"]
+    LAN["Standalone Docker<br/>LAN web access on port 8099"]
+    Browser -->|App hosting| Ingress
+    Browser -->|Docker hosting| LAN
+
+    subgraph Controller["Inkboard controller - one hosting mode"]
+        UI["Web UI<br/>Edit screens and widget instances"]
+        Screens["Screens and scheduling<br/>Device assignment, rotation, quiet hours"]
+        Widgets["Self-contained widget plugins<br/>Instance settings, load, measure, render"]
+        Sources["Shared data services<br/>Connections, credentials, cached data"]
+        Render["SVG layout to 800 x 480<br/>Validated 1-bit BMP"]
+        Images["Cached display images"]
+        DB[("SQLite<br/>Screens, settings, source snapshots")]
+        Files[("Persistent files<br/>Images and sign-in encryption key")]
+        DeviceAPI["Device API<br/>App: LAN port 8100<br/>Docker: port 8099"]
+
+        UI -->|Save each instance's settings| Screens
+        Screens --> Widgets
+        Widgets <-->|Load selected data| Sources
+        Widgets --> Render
+        Render -->|Same pipeline for live previews| UI
+        Render --> Images
+        DB --- Screens
+        Files --- Images
+        DeviceAPI -->|Resolve the device's current screen| Screens
+        Images -->|Current image| DeviceAPI
+    end
+
+    Ingress --> UI
+    LAN --> UI
+    Sources -->|App: Supervisor; Docker: URL and token| HA["Home Assistant<br/>Calendars and entity values"]
+    Sources -->|Device-code sign-in; read-only tasks| MS["Microsoft identity and Graph<br/>Microsoft To Do"]
+    Sources -.->|Month widget weather: opt-in| Weather["Open-Meteo"]
+
+    Device["Seeed EE04 / ESP32-S3<br/>ESPHome firmware"]
+    Panel["E-paper panel<br/>Keeps its image while asleep"]
+    Device -->|Wi-Fi: image GET and check-in POST; device token| DeviceAPI
+    DeviceAPI -->|BMP or 304; next refresh time in check-in| Device
+    Device -->|Refresh only when changed| Panel
+    Device <-->|Separate encrypted ESPHome API| HA
+```
+
+| Hosting mode       | Browser access                                                 | Display connection                | Home Assistant data                             |
+| ------------------ | -------------------------------------------------------------- | --------------------------------- | ----------------------------------------------- |
+| Home Assistant App | Sidebar through authenticated ingress                          | `http://<home-assistant-ip>:8100` | Supervisor-provided access; no long-lived token |
+| Standalone Docker  | `http://<host-ip>:8099` on your LAN; no built-in admin sign-in | `http://<host-ip>:8099`           | Home Assistant URL and long-lived token         |
+
+These are default ports. The display must use the host's LAN address, **not**
+the Home Assistant ingress URL or `localhost`. Both device endpoints require
+the device bearer token. In App mode, the device port exposes only device and
+health endpoints, not the admin UI. Standalone port 8099 must stay on a trusted
+LAN or behind an appropriately secured proxy.
+
+Each screen stores its own ordered **widget instances**. Two calendar widgets
+can select different calendars, and two To Do widgets can select different
+lists and display options. Empty selections mean no events or tasks. All
+widgets follow the same schema-driven editing and rendering lifecycle;
+connections and sign-ins remain shared under **Connections**, and data-source
+credentials are never passed to widgets or to the display.
+
+When the display wakes, it requests its current screen; the controller applies
+device assignment, rotation, schedules, and quiet hours. A changed image is
+downloaded and displayed; an unchanged revision can return `304 Not Modified`
+to avoid a redraw. Check-ins report battery, Wi-Fi, buttons, and display status,
+and return the next refresh delay. Button presses report their action before
+requesting the resulting screen. With maintenance mode off, the device sleeps
+between updates: Inkboard does not push images to a sleeping display.
 
 ## What you need
 
@@ -48,7 +128,7 @@ a small ESPHome firmware that downloads the current screen and sleeps.
    `https://github.com/ramiroidl/inkboard`, and close the dialog.
 3. Find **Inkboard** in the store, select **Install**, then **Start**. Turn on
    **Show in sidebar**.
-4. Open **Inkboard** from the sidebar. The **Display setup** card shows two
+4. Open **Inkboard** from the sidebar and expand **Connections**. **Display setup** shows two
    values you need in step 3:
    - `inkboard_controller_url`, such as `http://homeassistant.local:8100`.
      Replace the host name with your Home Assistant's **IP address**, such as
@@ -140,10 +220,12 @@ display's battery, Wi-Fi, and buttons to Home Assistant, plus the
 
 ## 4. Check that it works
 
-Within a minute of starting, the display refreshes once and shows the Inkboard
-**test pattern**: a white background, a black square at the top left, and
-readable text in the middle. On the Inkboard page, the display appears with its
-firmware version, battery voltage, and Wi-Fi signal.
+Within a minute of starting, the display refreshes once and shows its current
+screen. With no content screens configured, it shows the Inkboard **test
+pattern**: a white background, a black square at the top left, and readable
+text in the middle. On the Inkboard page, the display appears with its current-screen selector.
+Expand **Device details and display settings** for firmware version, battery
+voltage, and Wi-Fi signal.
 
 If it does not, see [Troubleshooting](#troubleshooting).
 
@@ -154,14 +236,14 @@ display on its next refresh or button press.
 
 ### Calendars
 
-The **Home Assistant calendars** card lists your Home Assistant calendars. Tick
-the ones to show and select **Save calendars**. Up to 10 calendars are merged,
-in time order, into the built-in **Calendar** screen; an event in two calendars
-is shown once, and with several calendars each event shows where it came from.
+Add a **Calendar agenda** or **Month calendar** widget to a screen, then tick
+the calendars in that widget's settings. Each instance has its own selection;
+leaving all unticked shows no events. Up to 10 calendars are merged in time
+order, and an event in two calendars is shown once.
 Multi-day events show when they end, such as `UNTIL NOV 8`.
 
 If Home Assistant or one calendar is unavailable, the last events stay on the
-screen and the card names the failing calendar. It recovers on its own.
+screen. It recovers on its own. Shared connection setup is under **Connections**.
 
 ### Microsoft To Do
 
@@ -180,25 +262,25 @@ needed. Microsoft requires an app registration, which is free and done once:
 3. Open **Authentication**, set **Allow public client flows** to **Yes**, and
    select **Save**. No client secret is needed.
 4. Copy the **Application (client) ID** from **Overview**.
-5. On the Inkboard page, paste it into the **Microsoft To Do** card, leave the
+5. On the Inkboard page, expand **Connections** and paste it into **Microsoft To Do**, leave the
    tenant as `common`, and select **Save app registration**. Inkboard switches
    the tenant automatically if the app allows only one kind of account.
 6. Select **Sign in with Microsoft**, open the link shown, enter the code, and
    approve read access. The card finishes on its own.
-7. Your **Tasks** list is selected. Tick other lists, such as **Groceries**,
-   and select **Save lists**.
+7. Add a **To Do list** widget to a screen and tick the lists, such as
+   **Tasks** or **Groceries**, in that widget's settings.
 
 Tasks are sorted by due date, then importance, and show `OVERDUE`, `TODAY`, or
-the due date, `!` for important tasks, and `↻` for repeating ones. The built-in
-**To Do** screen shows the lists ticked in the card. To show a single list or
-change how tasks look, use the **To Do list** widget on a custom screen.
+the due date, `!` for important tasks, and `↻` for repeating ones. Each
+**To Do list** widget owns its list selection and display options. Leaving all
+lists unticked shows no tasks, rather than inheriting another selection.
 
 Microsoft sign-in tokens are encrypted before they are saved and never reach
 the browser. If Microsoft is unavailable, or the sign-in expires, the last
 tasks stay on screen and the card asks you to sign in again. **Sign out**
 deletes the tokens and saved tasks.
 
-### Custom screens
+### Screens and widgets
 
 Select **New screen** and add up to 12 widgets. The preview is rendered by the
 controller, so it matches the display pixel for pixel.
@@ -209,7 +291,7 @@ controller, so it matches the display pixel for pixel.
 | Text                 | Wrapped message, up to six lines                                                   |
 | Date & time          | Date (default), clock, or both; a clock can lag between refreshes                  |
 | Home Assistant value | Any entity's state and unit, such as `sensor.outdoor_temp`; three can share a row  |
-| Calendar agenda      | Next events from the card's calendars, or from calendars chosen for this widget    |
+| Calendar agenda      | Next events from calendars chosen for this widget                                  |
 | Month calendar       | The whole month with event names, today marked, past days crossed out, and weather |
 | To Do list           | Open tasks from chosen To Do lists, with optional due dates and list names         |
 | Divider              | Heavy horizontal rule                                                              |
@@ -232,15 +314,17 @@ forecast comes from [Open-Meteo](https://open-meteo.com/) (CC BY 4.0) for Home
 Assistant's home location, rounded to about 1 km, and refreshes hourly; it is
 off by default because it sends that location to Open-Meteo.
 
-The built-in **Calendar** and **To Do** screens have a fixed layout. Select
-**Customize** on either one to replace it with a regular screen built from
-widgets (a date and a Calendar agenda, or a heading and a To Do list), then
-change each widget's settings or add others. The rotation, schedules, and
-displays that used the built-in screen switch to the new one. Deleting the
-customized screen brings the built-in screen back.
+All content screens use the same editable widgets. On upgrade, existing
+Calendar and To Do screens become regular screens automatically, and widgets
+that inherited page-wide selections get those selections saved into their
+own settings. Rotation, schedules, and device assignments are preserved.
+Deleting one of these screens does not recreate it. The test pattern is a
+diagnostic fallback, not a content widget.
 
-Untick **Show the test pattern screen** below the screen list to hide the test
-pattern once you have other screens.
+Expand **Display diagnostics** below the screen list and untick **Show the
+test pattern screen** to hide it once you have other screens. Device details,
+connections, rotation, schedules, quiet hours, and backup controls are collapsed
+by default; screen design and each device's current-screen selector stay visible.
 
 ### Rotation, schedules, and quiet hours
 
@@ -259,12 +343,13 @@ The display's buttons:
 
 ### Back up or move your screens
 
-The **Backup** card's **Export** downloads your custom screens, rotation,
-schedules, quiet hours, and calendar and To Do list selections as a file.
+Expand **Backup and restore**. **Export** downloads your screens (including
+each widget's settings), rotation, schedules, and quiet hours as a file.
 **Import** applies such a file, for example on a new Home Assistant. Screens
 that already exist are kept rather than duplicated. Sign-ins and tokens are not
-included, so sign in to Microsoft To Do before importing if the rotation uses
-the To Do screen.
+included, so connect the data sources to show live data after importing.
+Older backups are accepted and their inherited selections are saved into
+individual widgets.
 
 ## 6. Save battery
 
@@ -297,13 +382,14 @@ device's **Logs** in ESPHome Device Builder. Check that your Wi-Fi is 2.4 GHz
 and that `inkboard_controller_url` uses the IP address and port **8100**.
 
 - HTTP `401`: `inkboard_device_api_token` does not match the **Display setup**
-  card. Copy it again and reinstall the firmware.
+  settings under **Connections**. Copy it again and reinstall the firmware.
 - Connection errors: the Inkboard App is not running, the port under the App's
   **Network** section is not 8100, or a firewall blocks it.
 
 **Reversed colors (black background).** Turn maintenance mode on and press
 **Inkboard OG Force Redraw** in Home Assistant once. If the colors are still
-reversed, tick **Invert colors** on the display's card on the Inkboard page;
+reversed, expand **Device details and display settings** on the display's card
+and tick **Invert colors**;
 the display picks it up on its next refresh, without reinstalling the firmware.
 
 **A wireless firmware update fails.** Turn maintenance mode on, or press a key
@@ -316,14 +402,21 @@ image. See the App's **Documentation** tab.
 **To Do says the app "does not allow device sign-in".** Set **Allow public
 client flows** to **Yes** in the app registration.
 
-**A calendar or To Do list shows old data.** Its card on the Inkboard page shows
-the error. The display keeps the last good data until the source recovers.
+**A calendar or To Do list shows no data.** Edit the screen and check that this
+widget has calendars or lists ticked; it does not inherit another widget's
+selection. Expand **Connections** to check the source connection or Microsoft
+sign-in.
+
+**A calendar or To Do list shows old data.** Check **Connections** for Microsoft
+sign-in errors and the controller log for source refresh failures. Sources keep
+their last good data during outages; widgets without cached data show an error
+in the preview and on screen.
 
 ## Privacy and security
 
 - The Inkboard page is only reachable through Home Assistant, so only your
-  signed-in Home Assistant users can open it. Port 8100 serves only the display
-  endpoints, and every request needs the device token.
+  signed-in Home Assistant users can open it. Port 8100 serves only device and
+  health endpoints; device requests need the device token.
 - Home Assistant data is read through the Supervisor; no long-lived access token
   is created.
 - Your Wi-Fi password and keys live in ESPHome's secrets file, not in the

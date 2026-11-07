@@ -233,10 +233,13 @@ Exit criteria:
 
 **Outcome:** An administrator can create, preview, assign, and schedule screens.
 
-**Current status:** Built-in screens (calendar and test pattern) and user-created
-custom screens are available. Custom screens are built in the admin UI from
-heading, text, date/time, Home Assistant entity value, calendar agenda, and
-divider widgets, with a live pixel-exact preview. Devices keep a persisted
+**Current status:** All content screens use the same editable widget instances,
+including migrated Calendar and To Do screens. Each instance owns its settings
+and source selections; connections and cached data remain shared. The test
+pattern is a diagnostic fallback. Screens are built in the admin UI from
+heading, text, date/time, Home Assistant entity value, calendar agenda, month
+calendar, To Do list, and divider widgets, with a live pixel-exact preview.
+Rarely changed settings are collapsed by default. Devices keep a persisted
 current screen, navigate with KEY1/KEY3 or Home Assistant buttons, and can
 follow an ordered rotation with a configurable interval. Time-of-day schedule
 rules (weekday and time windows, ordered by priority) override rotation, and
@@ -330,8 +333,10 @@ before expiry and once on a Graph 401. Lists are selectable (default list
 preselected); incomplete tasks are merged and ordered by due date, importance,
 and creation time. Per-list snapshots survive outages and restarts; a revoked
 grant enters `reauth_required` while keeping cached tasks. Sign-out deletes
-tokens and snapshots. A built-in To Do screen joins rotation and a To Do list
-widget is available. Delta sync is not implemented.
+tokens and snapshots, not screens. The To Do screen uses the same widget
+renderer and editor as any other content screen. Every To Do widget selects
+its own lists and display options, with no page-wide fallback; sign-in remains
+shared under Connections. Delta sync is not implemented.
 
 Work:
 

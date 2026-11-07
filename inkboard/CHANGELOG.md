@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- All content screens use the same editable, self-contained widget system.
+  Calendar and To Do selections and display options belong to each instance;
+  empty selections no longer inherit page-wide defaults.
+- Existing Calendar and To Do screens and inherited selections migrate
+  automatically, preserving rotation, schedules, and display assignments.
+  Deleting a migrated screen no longer restores a fixed-layout screen.
+- Removed duplicate widget selection cards. Connections, device details,
+  diagnostics, rotation, schedules, quiet hours, and backups are collapsed by default.
+- Portable backups export version 2 per-instance settings and accept older
+  version 1 files, including their fixed-layout screens and inherited selections.
+- Added a README architecture diagram covering hosting, widgets, and device connections.
+
 ## 0.7.3
 
 - **Customize** the built-in Calendar and To Do screens: they become regular screens built

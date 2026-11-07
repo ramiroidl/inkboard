@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { openDatabase } from "./db/database.js";
+import { SettingsStore } from "./db/settings-store.js";
 import { formatEntityValue } from "./widgets/entity/index.js";
 import { wrapText } from "./widgets/sdk.js";
 
@@ -68,6 +70,7 @@ async function createApp(options: { homeAssistant?: boolean } = {}) {
   const authorization = ["Bearer", config.deviceApiToken].join(" ");
   return {
     app,
+    config,
     clock,
     fetchImplementation,
     authorization,
@@ -119,6 +122,96 @@ async function checkIn(
 }
 
 describe("custom screens", () => {
+  it("migrates inherited selections and customized screen references once", async () => {
+    const { app, config, authorization, clock } = await createApp({ homeAssistant: true });
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/screens",
+      payload: {
+        name: "My agenda",
+        widgets: [
+          { type: "calendar", maxEvents: 3, calendars: [] },
+          {
+            type: "calendar_month",
+            calendars: ["calendar.work"],
+            weekStart: "monday",
+            maxEvents: 4,
+            crossOutPastDays: true,
+            weather: false,
+          },
+          { type: "todo", maxItems: 5 },
+        ],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json<{ id: string }>().id;
+    await checkIn(app, authorization);
+    await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/rotation",
+      payload: { screenIds: ["calendar", "orientation"], intervalMinutes: 15 },
+    });
+    await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/schedules",
+      payload: { rules: [{ screenId: "calendar", days: [1], start: "07:00", end: "09:00" }] },
+    });
+    await app.close();
+
+    const database = await openDatabase(config);
+    const store = new SettingsStore(database, () => clock.now);
+    store.delete("widgetInstanceSelections");
+    store.delete("migratedScreenTemplates");
+    store.set("customizedBuiltins", { calendar: id });
+    store.set("microsoftTodo.selection", { listIds: ["groceries"] });
+    database.raw.prepare("DELETE FROM custom_screens WHERE id = ?").run("calendar");
+    database.close();
+
+    let restarted = await buildApp(config, { now: () => clock.now });
+    const read = async () =>
+      (
+        await restarted.inject({
+          method: "GET",
+          url: `/api/v1/admin/screens/${id}`,
+        })
+      ).json<{ widgets: { calendars?: string[]; lists?: string[] }[] }>();
+    expect((await read()).widgets).toMatchObject([
+      { calendars: ["calendar.family"] },
+      { calendars: ["calendar.work"] },
+      { lists: ["groceries"] },
+    ]);
+    const listing = await restarted.inject({ method: "GET", url: "/api/v1/admin/screens" });
+    expect(listing.json()).toMatchObject({
+      rotation: { screenIds: [id, "orientation"] },
+      schedules: [{ screenId: id }],
+    });
+    const devices = await restarted.inject({ method: "GET", url: "/api/v1/admin/devices" });
+    expect(devices.json()).toMatchObject({ devices: [{ currentScreenId: id }] });
+
+    await restarted.inject({
+      method: "PUT",
+      url: `/api/v1/admin/screens/${id}`,
+      payload: { name: "My agenda", widgets: [{ type: "calendar", maxEvents: 3, calendars: [] }] },
+    });
+    await restarted.close();
+    restarted = await buildApp(config, { now: () => clock.now });
+    expect((await read()).widgets).toEqual([{ type: "calendar", maxEvents: 3, calendars: [] }]);
+    await restarted.inject({ method: "DELETE", url: `/api/v1/admin/screens/${id}` });
+    expect(
+      (await restarted.inject({ method: "GET", url: "/api/v1/admin/screens" })).json(),
+    ).toMatchObject({
+      screens: [{ id: "orientation" }],
+      rotation: { screenIds: ["orientation"] },
+      schedules: [],
+    });
+    await restarted.close();
+    restarted = await buildApp(config, { now: () => clock.now });
+    expect(
+      (await restarted.inject({ method: "GET", url: "/api/v1/admin/screens" })).json(),
+    ).toMatchObject({ screens: [{ id: "orientation" }] });
+    await restarted.close();
+  });
+
   it("creates, renders, updates, and deletes custom screens", async () => {
     const { app, authorization, setTemperature, setHomeAssistantDown, clock } = await createApp({
       homeAssistant: true,
@@ -137,8 +230,8 @@ describe("custom screens", () => {
     const listed = await app.inject({ method: "GET", url: "/api/v1/admin/screens" });
     expect(listed.json()).toMatchObject({
       screens: [
-        { id: "calendar", kind: "builtin" },
-        { id: "orientation", kind: "builtin" },
+        { id: "calendar", kind: "custom" },
+        { id: "orientation", kind: "diagnostic" },
         { id: screen.id, kind: "custom", name: "Living room" },
       ],
     });

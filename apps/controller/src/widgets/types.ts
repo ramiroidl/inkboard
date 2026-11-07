@@ -39,25 +39,25 @@ export interface WidgetServices extends WidgetEnvironment {
     /** False when Home Assistant is not connected. */
     configured: boolean;
     /**
-     * Upcoming events, oldest first. Without `entityIds`, events come from the calendars
-     * selected on the admin page; otherwise from the given `calendar.*` entities.
+     * Upcoming events, oldest first, from this instance's `calendar.*` entities.
+     * An empty selection returns no events.
      */
-    getEvents(entityIds?: string[]): Promise<CalendarEvent[]>;
+    getEvents(entityIds: string[]): Promise<CalendarEvent[]>;
     /**
      * Events overlapping `start`–`end`, such as a whole month including past days, from the
-     * admin page's calendars or the given `calendar.*` entities. Throws when Home Assistant is
+     * given `calendar.*` entities. Throws when Home Assistant is
      * unavailable and nothing was fetched for the range before.
      */
-    getEventsBetween(start: Date, end: Date, entityIds?: string[]): Promise<CalendarEvent[]>;
+    getEventsBetween(start: Date, end: Date, entityIds: string[]): Promise<CalendarEvent[]>;
   };
   todo: {
     /** False until Microsoft To Do is signed in. */
     configured: boolean;
     /**
-     * Incomplete tasks by due date then importance. Without `listIds`, tasks come from the
-     * lists selected on the admin page; otherwise from the given Microsoft To Do lists.
+     * Incomplete tasks by due date then importance from this instance's lists.
+     * An empty selection returns no tasks.
      */
-    getTasks(listIds?: string[]): Promise<TodoTask[]>;
+    getTasks(listIds: string[]): Promise<TodoTask[]>;
   };
   /**
    * GETs JSON from an http(s) URL with a 10 second timeout and a response limit of 256 KB.

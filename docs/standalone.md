@@ -58,6 +58,11 @@ Optional settings:
 | `INKBOARD_TODO_REFRESH_SECONDS`    | How often To Do tasks are fetched (60–3,600, default 300)            |
 | `INKBOARD_SECRET_KEY`              | 32-byte key (hex or base64) for saved sign-ins; generated when unset |
 
+`INKBOARD_HOME_ASSISTANT_CALENDAR` is a legacy starting selection used to seed
+an editable Calendar screen. It is not a live default for other widgets.
+Choose calendars and To Do lists in each widget's settings; an empty selection
+shows no data. Microsoft sign-in and shared source setup are under **Connections**.
+
 ## Run
 
 Build the image and start it with a named volume so the database survives
@@ -101,11 +106,32 @@ need the saved screens and settings.
 A `401` from `/api/v1/device/image.bmp` means the display's token does not
 match `INKBOARD_DEVICE_API_TOKEN`.
 
+## Screens and device updates
+
+The [README architecture diagram](../README.md#how-the-app-works) shows both
+hosting modes. In Docker, the browser and display reach the same controller on
+port 8099, but only device endpoints require the device bearer token; the admin
+UI has no built-in sign-in. Do not expose this port to the internet.
+
+Create or edit screens in the web UI. Each widget instance stores its own
+calendar/list selections and display options, while connections and cached data
+are shared. The controller renders the screen to an 800×480 1-bit BMP; the
+ESPHome device pulls it over Wi-Fi and reports check-ins with its next refresh
+delay. Changing widget settings does not require a firmware update.
+
+Expand **Connections**, **Automatic rotation**, **Schedules**, **Quiet hours**,
+**Backup and restore**, or a display's **Device details and display settings**
+when needed. These are collapsed by default, leaving screen design and current
+screen selection visible.
+
 ## Move to the Home Assistant App later
 
 The App starts with empty settings. To keep the display working without
 reflashing, set the App's **Device token** option to the token the firmware
 already uses, then change only `inkboard_controller_url` to the App's device
-port (8100) and install the firmware over Wi-Fi. Use **Export** in the old
-controller's **Backup** card and **Import** on the new Inkboard page to bring
-over your screens, rotation, schedules, quiet hours, and selections.
+port (8100) and install the firmware over Wi-Fi. Expand **Backup and restore**,
+use **Export** on the old controller and **Import** on the new one to bring
+over screens with each widget's settings, rotation, schedules, quiet hours, and
+test-pattern visibility. Sign-ins and tokens are not exported; connect the data
+sources separately. Older backups are accepted and their inherited selections
+are converted into per-instance settings.

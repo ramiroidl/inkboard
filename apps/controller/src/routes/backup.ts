@@ -8,7 +8,7 @@ const ClockSchema = Type.String({ pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" });
 
 const BackupSchema = Type.Object({
   format: Type.Literal("inkboard-backup"),
-  version: Type.Literal(1),
+  version: Type.Union([Type.Literal(1), Type.Literal(2)]),
   exportedAt: Type.String({ maxLength: 64 }),
   screens: Type.Array(
     Type.Object({

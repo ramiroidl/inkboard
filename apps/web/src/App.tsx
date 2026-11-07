@@ -56,7 +56,9 @@ export function App() {
   }, []);
 
   const reloadScreensQuietly = useCallback(() => {
-    void reloadScreens().catch(() => undefined);
+    void reloadScreens().catch((reason: unknown) => {
+      setError(reason instanceof Error ? reason.message : "Unable to reload screens");
+    });
   }, [reloadScreens]);
 
   const setTestPatternVisible = async (visible: boolean) => {
@@ -102,20 +104,6 @@ export function App() {
       });
     return () => controller.abort();
   }, [reloadScreens]);
-
-  const customizeScreen = async (screenId: ScreenId) => {
-    const response = await fetch(`api/v1/admin/screens/${encodeURIComponent(screenId)}/customize`, {
-      method: "POST",
-    });
-    if (!response.ok) {
-      setError(`Unable to customize the screen (${response.status})`);
-      return;
-    }
-    setError(null);
-    const copy = (await response.json()) as CustomScreen;
-    await reloadScreens();
-    setEditor({ mode: "edit", screen: copy });
-  };
 
   const editScreen = async (screenId: ScreenId) => {
     const response = await fetch(`api/v1/admin/screens/${encodeURIComponent(screenId)}`);
@@ -195,27 +183,28 @@ export function App() {
           </strong>
         </div>
         {status ? (
-          <dl>
-            <div>
-              <dt>Display</dt>
-              <dd>
-                {status.displayProfile.width}×{status.displayProfile.height}
-              </dd>
-            </div>
-            <div>
-              <dt>Output</dt>
-              <dd>{status.displayProfile.bitsPerPixel}-bit monochrome</dd>
-            </div>
-            <div>
-              <dt>BMP size</dt>
-              <dd>{status.displayProfile.expectedBmpBytes.toLocaleString()} bytes</dd>
-            </div>
-          </dl>
+          <details className="settings-details">
+            <summary>Controller details</summary>
+            <dl>
+              <div>
+                <dt>Display</dt>
+                <dd>
+                  {status.displayProfile.width}×{status.displayProfile.height}
+                </dd>
+              </div>
+              <div>
+                <dt>Output</dt>
+                <dd>{status.displayProfile.bitsPerPixel}-bit monochrome</dd>
+              </div>
+              <div>
+                <dt>BMP size</dt>
+                <dd>{status.displayProfile.expectedBmpBytes.toLocaleString()} bytes</dd>
+              </div>
+            </dl>
+          </details>
         ) : null}
         {error ? <p className="error-message">{error}</p> : null}
       </section>
-
-      {status?.app.mode === "home_assistant" ? <DeviceSetup app={status.app} /> : null}
 
       <section className="status-card device-card">
         <div>
@@ -233,43 +222,58 @@ export function App() {
                   {device.id}
                   {isStale(device.lastSeenAt) ? <span className="stale">Stale</span> : null}
                 </h2>
-                <dl>
-                  <div>
-                    <dt>Last seen</dt>
-                    <dd>{new Date(device.lastSeenAt).toLocaleString()}</dd>
-                  </div>
-                  <div>
-                    <dt>Firmware</dt>
-                    <dd>{device.firmwareVersion}</dd>
-                  </div>
-                  <div>
-                    <dt>Battery</dt>
-                    <dd>
-                      {device.lastBatteryVoltage === null
-                        ? "Unknown"
-                        : `${device.lastBatteryVoltage.toFixed(2)} V`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Wi-Fi</dt>
-                    <dd>
-                      {device.lastWifiRssi === null
-                        ? "Unknown"
-                        : `${Math.round(device.lastWifiRssi)} dBm`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Wake reason</dt>
-                    <dd>{device.lastWakeReason.replaceAll("_", " ")}</dd>
-                  </div>
-                  <div>
-                    <dt>Last action</dt>
-                    <dd>
-                      {device.lastButtonEvent.replaceAll("_", " ")} /{" "}
-                      {device.lastDisplayResult.replaceAll("_", " ")}
-                    </dd>
-                  </div>
-                </dl>
+                <details className="settings-details">
+                  <summary>Device details and display settings</summary>
+                  <dl>
+                    <div>
+                      <dt>Last seen</dt>
+                      <dd>{new Date(device.lastSeenAt).toLocaleString()}</dd>
+                    </div>
+                    <div>
+                      <dt>Firmware</dt>
+                      <dd>{device.firmwareVersion}</dd>
+                    </div>
+                    <div>
+                      <dt>Battery</dt>
+                      <dd>
+                        {device.lastBatteryVoltage === null
+                          ? "Unknown"
+                          : `${device.lastBatteryVoltage.toFixed(2)} V`}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Wi-Fi</dt>
+                      <dd>
+                        {device.lastWifiRssi === null
+                          ? "Unknown"
+                          : `${Math.round(device.lastWifiRssi)} dBm`}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Wake reason</dt>
+                      <dd>{device.lastWakeReason.replaceAll("_", " ")}</dd>
+                    </div>
+                    <div>
+                      <dt>Last action</dt>
+                      <dd>
+                        {device.lastButtonEvent.replaceAll("_", " ")} /{" "}
+                        {device.lastDisplayResult.replaceAll("_", " ")}
+                      </dd>
+                    </div>
+                  </dl>
+                  <label className="inline-field">
+                    <input
+                      type="checkbox"
+                      checked={device.invertColors}
+                      onChange={(event) => void setInvertColors(device.id, event.target.checked)}
+                    />
+                    Invert colors
+                  </label>
+                  <small className="hint">
+                    Turn on if this display shows a black background where the previews are white.
+                    Applied on its next refresh.
+                  </small>
+                </details>
                 <label className="screen-select">
                   <span>Current screen</span>
                   <select
@@ -284,18 +288,6 @@ export function App() {
                   </select>
                   <small>Applied on the device&apos;s next refresh or button press.</small>
                 </label>
-                <label className="inline-field">
-                  <input
-                    type="checkbox"
-                    checked={device.invertColors}
-                    onChange={(event) => void setInvertColors(device.id, event.target.checked)}
-                  />
-                  Invert colors
-                </label>
-                <small className="hint">
-                  Turn on if this display shows a black background where the previews are white.
-                  Applied on its next refresh.
-                </small>
               </article>
             ))}
           </div>
@@ -352,37 +344,32 @@ export function App() {
                     </button>
                   </span>
                 ) : (
-                  <span className="screen-actions">
-                    <span className="badge">Built-in</span>
-                    {screen.customizable === true ? (
-                      <button
-                        type="button"
-                        title="Replace this screen with an editable copy made of widgets"
-                        onClick={() => void customizeScreen(screen.id)}
-                      >
-                        Customize
-                      </button>
-                    ) : null}
-                  </span>
+                  <span className="badge">Diagnostic</span>
                 )}
               </figcaption>
             </figure>
           ))}
         </div>
-        <label className="inline-field test-pattern-toggle">
-          <input
-            type="checkbox"
-            checked={!testPatternHidden}
-            onChange={(event) => void setTestPatternVisible(event.target.checked)}
-          />
-          Show the test pattern screen
-        </label>
+        <details className="settings-details">
+          <summary>Display diagnostics</summary>
+          <label className="inline-field test-pattern-toggle">
+            <input
+              type="checkbox"
+              checked={!testPatternHidden}
+              onChange={(event) => void setTestPatternVisible(event.target.checked)}
+            />
+            Show the test pattern screen
+          </label>
+        </details>
       </section>
 
-      <section className="status-card device-card">
-        <div>
-          <strong>Automatic rotation</strong>
-        </div>
+      <details className="status-card device-card">
+        <summary>
+          Automatic rotation
+          {rotation && rotation.screenIds.length > 0
+            ? ` · ${rotation.screenIds.length} screens`
+            : " · Off"}
+        </summary>
         <p className="empty-message">
           Each display moves to the next screen in this list after the interval. Pressing KEY1 or
           KEY3 keeps the chosen screen for a full interval. The display checks back when the next
@@ -396,12 +383,15 @@ export function App() {
             onSaved={setRotation}
           />
         ) : null}
-      </section>
+      </details>
 
-      <section className="status-card device-card">
-        <div>
-          <strong>Schedules</strong>
-        </div>
+      <details className="status-card device-card">
+        <summary>
+          Schedules
+          {schedule && schedule.schedules.length > 0
+            ? ` · ${schedule.schedules.length} rules`
+            : " · None"}
+        </summary>
         <p className="empty-message">
           Show a screen at set times, such as an agenda on weekday mornings. Schedules take priority
           over rotation; a KEY1 or KEY3 press still holds its screen for one interval.
@@ -416,12 +406,15 @@ export function App() {
             onSaved={() => void reloadScreens()}
           />
         ) : null}
-      </section>
+      </details>
 
-      <section className="status-card device-card">
-        <div>
-          <strong>Quiet hours</strong>
-        </div>
+      <details className="status-card device-card">
+        <summary>
+          Quiet hours
+          {schedule?.quietHours.enabled
+            ? ` · ${schedule.quietHours.start}–${schedule.quietHours.end}`
+            : " · Off"}
+        </summary>
         <p className="empty-message">
           The display keeps its current image and, when maintenance mode is off, sleeps until quiet
           hours end. Pressing a key still updates it.
@@ -434,49 +427,25 @@ export function App() {
             onSaved={() => void reloadScreens()}
           />
         ) : null}
-      </section>
+      </details>
 
-      <section className="status-card device-card" aria-live="polite">
-        <div>
-          <span
-            className={`status-dot ${
-              status?.calendar.state === "ready"
-                ? "ready"
-                : status?.calendar.state === "degraded"
-                  ? "error"
-                  : ""
-            }`}
-          />
-          <strong>
-            {status?.calendar.state === "ready"
-              ? "Home Assistant calendars ready"
-              : status?.calendar.state === "degraded"
-                ? "Home Assistant calendars degraded"
-                : status?.calendar.homeAssistantConfigured
-                  ? "Choose Home Assistant calendars"
-                  : "Home Assistant not configured"}
-          </strong>
-        </div>
-        {status !== null ? (
-          <CalendarSettings
-            key={importCount}
-            status={status.calendar}
-            onSaved={(calendar) => {
-              setStatus({ ...status, calendar });
-              void reloadScreens();
-            }}
-          />
-        ) : null}
-      </section>
+      <details className="status-card device-card">
+        <summary>Connections</summary>
+        <p className="hint">
+          Connect data sources here. Choose calendars and lists in each widget&apos;s settings.
+        </p>
+        {status?.app.mode === "home_assistant" ? <DeviceSetup app={status.app} /> : null}
+        <section className="connection-section">
+          <h2>Home Assistant</h2>
+          {status !== null ? <CalendarSettings status={status.calendar} /> : null}
+        </section>
+        <section className="connection-section" aria-live="polite">
+          <MicrosoftTodoSettings key={importCount} onChanged={reloadScreensQuietly} />
+        </section>
+      </details>
 
-      <section className="status-card device-card" aria-live="polite">
-        <MicrosoftTodoSettings key={importCount} onChanged={reloadScreensQuietly} />
-      </section>
-
-      <section className="status-card device-card">
-        <div>
-          <strong>Backup</strong>
-        </div>
+      <details className="status-card device-card">
+        <summary>Backup and restore</summary>
         <BackupSettings
           onImported={() => {
             reloadScreensQuietly();
@@ -484,13 +453,19 @@ export function App() {
               .then(async (response) => {
                 if (response.ok) {
                   setStatus((await response.json()) as AdminStatusResponse);
+                } else {
+                  throw new Error(`Unable to reload controller status (${response.status})`);
                 }
               })
-              .catch(() => undefined)
+              .catch((reason: unknown) => {
+                setError(
+                  reason instanceof Error ? reason.message : "Unable to reload controller status",
+                );
+              })
               .finally(() => setImportCount((count) => count + 1));
           }}
         />
-      </section>
+      </details>
     </main>
   );
 }

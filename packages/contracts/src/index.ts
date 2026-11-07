@@ -205,22 +205,16 @@ export interface AdminDevicesResponse {
   devices: AdminDevice[];
 }
 
-export const BUILTIN_SCREEN_IDS = ["calendar", "orientation"] as const;
-
-export type BuiltinScreenId = (typeof BUILTIN_SCREEN_IDS)[number];
-
-/** Built-in screen IDs or custom screen IDs prefixed with `screen_`. */
+/** Persisted screen IDs, or `orientation` for the diagnostic test pattern. */
 export type ScreenId = string;
 
-export type ScreenKind = "builtin" | "custom";
+export type ScreenKind = "diagnostic" | "custom";
 
 export interface ScreenSummary {
   id: ScreenId;
   name: string;
   description: string;
   kind: ScreenKind;
-  /** Built-in screens that can be replaced by an editable copy made of widgets. */
-  customizable?: boolean;
 }
 
 export interface RotationSettings {
@@ -332,16 +326,16 @@ export interface CustomScreen extends CustomScreenInput {
 /** Screens and display settings exported from one controller to import into another. */
 export interface InkboardBackup {
   format: "inkboard-backup";
-  version: 1;
+  version: 1 | 2;
   exportedAt: string;
   screens: { id: string; name: string; widgets: ScreenWidget[] }[];
   rotation: RotationSettings;
   schedules: { screenId: ScreenId; days: number[]; start: string; end: string }[];
   quietHours: QuietHours;
   testPatternHidden: boolean;
-  /** Selected Home Assistant calendar entity IDs. */
+  /** Legacy selections for version 1 imports; empty in version 2 exports. */
   calendars: string[];
-  /** Selected Microsoft To Do list IDs. Sign-ins are not exported. */
+  /** Legacy selections for version 1 imports; empty in version 2 exports. */
   todoLists: string[];
 }
 

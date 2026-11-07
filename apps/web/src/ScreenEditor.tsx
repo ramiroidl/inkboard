@@ -5,7 +5,6 @@ import type {
   AdminTodoListsResponse,
   CustomScreen,
   CustomScreenInput,
-  EntitySummary,
   ScreenWidget,
   WidgetDescriptor,
   WidgetSettingSchema,
@@ -25,58 +24,54 @@ function newWidget(descriptor: WidgetDescriptor): ScreenWidget {
   return { type: descriptor.type, ...structuredClone(descriptor.defaultConfig) };
 }
 
-let entityRequest: Promise<EntitySummary[]> | null = null;
-
-/** Home Assistant entities for suggestions, fetched once per page load. */
-function useEntities(enabled: boolean): EntitySummary[] {
-  const [entities, setEntities] = useState<EntitySummary[]>([]);
+function useSuggestions(source: WidgetSettingSchema["x-suggest"]) {
+  const [options, setOptions] = useState<{ id: string; name: string; domain?: string }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   useEffect(() => {
-    if (!enabled) {
+    if (source !== "entity" && source !== "todo-list") {
       return;
     }
-    entityRequest ??= fetch("api/v1/admin/entities")
-      .then(async (response) =>
-        response.ok ? ((await response.json()) as AdminEntitiesResponse).entities : [],
-      )
-      .catch(() => []);
-    let active = true;
-    void entityRequest.then((list) => {
-      if (active) {
-        setEntities(list);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [enabled]);
-  return entities;
-}
-
-/** Microsoft To Do lists of the signed-in account, fetched once per page load. */
-let todoListRequest: Promise<{ id: string; name: string }[]> | null = null;
-
-function useTodoLists(enabled: boolean): { id: string; name: string }[] {
-  const [lists, setLists] = useState<{ id: string; name: string }[]>([]);
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-    todoListRequest ??= fetch("api/v1/admin/microsoft-todo/lists")
-      .then(async (response) =>
-        response.ok ? ((await response.json()) as AdminTodoListsResponse).available : [],
-      )
-      .catch(() => []);
-    let active = true;
-    void todoListRequest.then((list) => {
-      if (active) {
-        setLists(list);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [enabled]);
-  return lists;
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+    void fetch(
+      source === "entity" ? "api/v1/admin/entities" : "api/v1/admin/microsoft-todo/lists",
+      { signal: controller.signal },
+    )
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readError(response, "Unable to load widget sources"));
+        }
+        if (source === "entity") {
+          const body = (await response.json()) as AdminEntitiesResponse;
+          setOptions(
+            body.entities.map((entity) => ({
+              id: entity.entityId,
+              name: entity.name,
+              domain: entity.domain,
+            })),
+          );
+          setError(body.error);
+        } else {
+          const body = (await response.json()) as AdminTodoListsResponse;
+          setOptions(body.available);
+          setError(body.error);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(reason instanceof Error ? reason.message : "Unable to load widget sources");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      });
+    return () => controller.abort();
+  }, [source]);
+  return { options, error, loading };
 }
 
 /** Renders one setting from the widget's JSON Schema. */
@@ -92,8 +87,12 @@ function SettingField({
   onChange: (value: unknown) => void;
 }) {
   const suggestionsId = useId();
-  const entities = useEntities(schema["x-suggest"] === "entity");
-  const todoLists = useTodoLists(schema["x-suggest"] === "todo-list");
+  const suggestions = useSuggestions(schema["x-suggest"]);
+  const suggestedOptions = suggestions.options.filter(
+    (option) =>
+      schema["x-domains"] === undefined ||
+      (option.domain !== undefined && schema["x-domains"].includes(option.domain)),
+  );
   const label = schema.title ?? name;
   const hint = schema.description ? <small className="hint">{schema.description}</small> : null;
   const placeholder = typeof schema.examples?.[0] === "string" ? schema.examples[0] : undefined;
@@ -175,19 +174,14 @@ function SettingField({
           )}
           {schema["x-suggest"] === "entity" ? (
             <datalist id={suggestionsId}>
-              {entities
-                .filter(
-                  (entity) =>
-                    schema["x-domains"] === undefined ||
-                    schema["x-domains"].includes(entity.domain),
-                )
-                .map((entity) => (
-                  <option key={entity.entityId} value={entity.entityId}>
-                    {entity.name}
-                  </option>
-                ))}
+              {suggestedOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
             </datalist>
           ) : null}
+          {suggestions.error ? <small className="error-message">{suggestions.error}</small> : null}
           {hint}
         </label>
       );
@@ -201,15 +195,7 @@ function SettingField({
       const selected = Array.isArray(value)
         ? value.filter((item): item is string => typeof item === "string")
         : [];
-      const options =
-        schema["x-suggest"] === "todo-list"
-          ? todoLists.map((list) => ({ id: list.id, name: list.name }))
-          : entities
-              .filter(
-                (entity) =>
-                  schema["x-domains"] === undefined || schema["x-domains"].includes(entity.domain),
-              )
-              .map((entity) => ({ id: entity.entityId, name: entity.name }));
+      const options = [...suggestedOptions];
       // Keep chosen items visible even if their source cannot list them right now.
       for (const id of selected) {
         if (!options.some((option) => option.id === id)) {
@@ -219,10 +205,12 @@ function SettingField({
       return (
         <fieldset className="field entity-checklist">
           <span>{label}</span>
-          {options.length === 0 ? (
+          {suggestions.error ? <small className="error-message">{suggestions.error}</small> : null}
+          {suggestions.loading ? <small className="hint">Loading sources…</small> : null}
+          {options.length === 0 && !suggestions.loading && !suggestions.error ? (
             <small className="hint">
               {schema["x-suggest"] === "todo-list"
-                ? "Sign in to Microsoft To Do to choose lists."
+                ? "No To Do lists found. Manage your account under Connections."
                 : "No matching entities."}
             </small>
           ) : null}

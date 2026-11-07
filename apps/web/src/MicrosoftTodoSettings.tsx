@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import type { AdminTodoListsResponse, MicrosoftTodoStatus } from "@inkboard/contracts";
+import type { MicrosoftTodoStatus } from "@inkboard/contracts";
 
 const BASE = "api/v1/admin/microsoft-todo";
 
@@ -29,21 +29,17 @@ const STATE_LABELS: Record<MicrosoftTodoStatus["state"], string> = {
 };
 
 /**
- * Connects Microsoft To Do with a device-code sign-in and chooses the lists shown by the To
- * Do screen and widget. Tokens stay on the controller.
+ * Connects Microsoft To Do with a device-code sign-in. Tokens stay on the controller.
  */
 export function MicrosoftTodoSettings({ onChanged }: { onChanged: () => void }) {
   const [status, setStatus] = useState<MicrosoftTodoStatus | null>(null);
   const [clientId, setClientId] = useState("");
   const [tenant, setTenant] = useState("common");
-  const [lists, setLists] = useState<AdminTodoListsResponse | null>(null);
-  const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const apply = useCallback((next: MicrosoftTodoStatus) => {
     setStatus(next);
-    setSelected(next.selectedListIds);
   }, []);
 
   // Screens depend on the sign-in state, so reload them when it changes.
@@ -80,23 +76,12 @@ export function MicrosoftTodoSettings({ onChanged }: { onChanged: () => void }) 
     const timer = window.setInterval(() => {
       void request<MicrosoftTodoStatus>(BASE)
         .then(apply)
-        .catch(() => undefined);
+        .catch((reason: unknown) => {
+          setMessage(reason instanceof Error ? reason.message : "Unable to check sign-in");
+        });
     }, 5000);
     return () => window.clearInterval(timer);
   }, [pending, apply]);
-
-  const signedIn = status?.state === "signed_in";
-  useEffect(() => {
-    if (!signedIn) {
-      setLists(null);
-      return;
-    }
-    void request<AdminTodoListsResponse>(`${BASE}/lists`)
-      .then(setLists)
-      .catch((reason: unknown) => {
-        setMessage(reason instanceof Error ? reason.message : "Unable to list To Do lists");
-      });
-  }, [signedIn]);
 
   const run = async (action: () => Promise<MicrosoftTodoStatus>, done?: string) => {
     setBusy(true);
@@ -124,16 +109,6 @@ export function MicrosoftTodoSettings({ onChanged }: { onChanged: () => void }) 
     return message ? <p className="error-message">{message}</p> : <p className="hint">Loading…</p>;
   }
 
-  const options = [
-    ...(lists?.available ?? []),
-    ...status.lists
-      .filter((list) => !lists?.available.some((item) => item.id === list.id))
-      .map((list) => ({ id: list.id, name: list.name })),
-  ];
-  const listStatus = new Map(status.lists.map((list) => [list.id, list]));
-  const selectionChanged =
-    selected.length !== status.selectedListIds.length ||
-    selected.some((id) => !status.selectedListIds.includes(id));
   const settingsChanged =
     clientId.trim().toLowerCase() !== (status.clientId ?? "") || tenant.trim() !== status.tenant;
 
@@ -206,64 +181,7 @@ export function MicrosoftTodoSettings({ onChanged }: { onChanged: () => void }) 
           </div>
         ) : null}
 
-        {status.state === "signed_in" ? (
-          <>
-            {lists?.error ? (
-              <p className="error-message">Could not list To Do lists: {lists.error}</p>
-            ) : null}
-            {lists === null ? <p className="hint">Loading lists…</p> : null}
-            <ul className="calendar-list">
-              {options.map((list) => {
-                const source = listStatus.get(list.id);
-                return (
-                  <li key={list.id}>
-                    <label className="inline-field">
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(list.id)}
-                        onChange={(event) =>
-                          setSelected(
-                            event.target.checked
-                              ? [...selected, list.id]
-                              : selected.filter((id) => id !== list.id),
-                          )
-                        }
-                      />
-                      <span className="calendar-name">{list.name}</span>
-                    </label>
-                    {source !== undefined ? (
-                      <span className="hint">
-                        {source.lastError ??
-                          `${source.taskCount} open task${source.taskCount === 1 ? "" : "s"}`}
-                      </span>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        ) : null}
-
         <div className="editor-buttons">
-          {status.state === "signed_in" ? (
-            <button
-              type="button"
-              className="primary"
-              disabled={busy || !selectionChanged}
-              onClick={() =>
-                void run(async () => {
-                  const next = await request<MicrosoftTodoStatus>(
-                    `${BASE}/lists`,
-                    json("PUT", { listIds: selected }),
-                  );
-                  onChanged();
-                  return next;
-                }, "Lists saved.")
-              }
-            >
-              Save lists
-            </button>
-          ) : null}
           {status.state === "signed_out" || status.state === "reauth_required" ? (
             <button
               type="button"
@@ -305,7 +223,7 @@ export function MicrosoftTodoSettings({ onChanged }: { onChanged: () => void }) 
         <p className="hint">
           {status.state === "not_configured"
             ? "Register an app in Microsoft Entra with personal accounts and public client flows enabled, then paste its Application (client) ID. See the README for steps."
-            : "Selected lists appear on the To Do screen and in the To Do list widget. Add the To Do screen to Automatic rotation to alternate it with the calendar."}
+            : "Choose lists and display options in each To Do list widget's settings."}
         </p>
         {message ? <p className="hint">{message}</p> : null}
         {status.lastError ? <p className="error-message">{status.lastError}</p> : null}

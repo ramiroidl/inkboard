@@ -198,7 +198,7 @@ export default defineWidget({
     calendars: Type.Optional(
       EntityIdListSchema({
         title: "Calendars",
-        description: "Leave all unticked to use the calendars chosen in the Home Assistant card.",
+        description: "Choose the calendars for this widget only.",
         domains: ["calendar"],
       }),
     ),
@@ -260,7 +260,7 @@ export default defineWidget({
     const end = keyToDate(addDays(first, daysInMonth(month) + 1));
     const [events, weather] = await Promise.all([
       services.calendar.configured
-        ? services.calendar.getEventsBetween(start, end, config.calendars)
+        ? services.calendar.getEventsBetween(start, end, config.calendars ?? [])
         : Promise.resolve(null),
       config.weather ? loadWeather(services) : Promise.resolve({}),
     ]);

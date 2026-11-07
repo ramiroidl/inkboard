@@ -1,5 +1,76 @@
 # Inkboard Controller system design
 
+## Current implementation
+
+The [README architecture diagram](../README.md#how-the-app-works) describes the
+running application. Inkboard is a TypeScript/Fastify controller with a React
+admin UI and an ESPHome display client. It runs either as a Home Assistant App
+or as a standalone Docker service; the rendering and widget system are the same
+in both modes.
+
+### Hosting and network boundaries
+
+- **Home Assistant App:** users open the UI through authenticated ingress.
+  The display uses the host's LAN address and device-only port 8100, not the
+  ingress URL. Home Assistant data is accessed through the Supervisor.
+- **Standalone Docker:** browser and device requests share port 8099. The
+  admin UI has no built-in sign-in, so the port must remain on a trusted LAN
+  or behind a secured proxy. Home Assistant access uses a URL and long-lived token.
+- **Device requests:** `GET /api/v1/device/image.bmp?device=<id>` downloads the
+  current image, and `POST /api/v1/device/check-in` reports device status and
+  button events. Both require the device bearer token. Check-in responses
+  include `nextRefreshSeconds`; unchanged image revisions can return HTTP 304.
+- **ESPHome API:** telemetry and Home Assistant buttons use a separate encrypted
+  connection to the firmware. That connection is distinct from Inkboard's HTTP API.
+
+### Screens, widget instances, and rendering
+
+Every content screen stores a name and an ordered array of widget instances.
+An instance contains its plugin `type` and its own settings; there is no
+fixed-layout content-screen renderer or page-wide selection fallback. Calendar
+and To Do widgets use only their instance's calendars or lists, and an empty
+selection means no events or tasks. Connections, credentials, and source caches
+remain shared; widgets receive data services, never credentials.
+
+The registry discovers `apps/controller/src/widgets/<type>/index.ts`, validates
+settings against each plugin's schema, and supplies that schema to the editor.
+For a render, the controller resolves the current screen, loads each widget's
+data, measures and lays out the widgets, and builds an 800×480 SVG. Sharp
+rasterizes it and the image package encodes and validates a 1-bit BMP. Live
+previews use the same pipeline. Widget failures become visible error boxes
+without preventing the rest of the screen from rendering.
+
+SQLite persists screens, schedules, settings, device state, and source
+snapshots. Image files and the sign-in encryption key live in the persistent
+data directory. Unchanged SVG output reuses its image artifact. The device
+initiates image and check-in requests; the controller does not push to a
+sleeping display, and the panel retains its image while asleep.
+
+### Configuration and migration
+
+Screen design and the device's current-screen selector remain visible.
+Connections, device details, diagnostics, rotation, schedules, quiet hours,
+and backups are collapsed until needed. Source selections and display options
+are edited with their widget instance, not in separate integration cards.
+
+On upgrade, existing Calendar and To Do screens become editable widget
+screens. Inherited selections are saved into each existing widget once;
+explicit selections, rotation, schedules, and device references are preserved.
+Deleting a migrated screen does not recreate it. The orientation test pattern
+is a diagnostic fallback, not a content widget.
+
+Portable backups export version 2 per-instance settings without credentials.
+Version 1 imports materialize inherited selections and reconstruct referenced
+fixed-layout screens. Imports do not change data-source connections or require
+sign-in; connect sources separately to show live data.
+
+## Target design and future extensions
+
+The numbered sections below retain the broader design proposals. Page capture,
+native TRMNL compatibility, render-job queues, per-device credentials, and
+standalone admin authentication are future work, not shipped functionality.
+For implemented API paths, see [development endpoints](development.md#endpoints).
+
 ## 1. Design decision
 
 Use a **thin display client and local rendering controller**, delivered first as
@@ -23,21 +94,10 @@ This boundary is preferred over rendering widgets directly in ESPHome because:
 
 ## 2. Context
 
-```mermaid
-flowchart LR
-    A[Administrator browser] --> C[Inkboard Controller]
-    C --> H[Home Assistant REST API]
-    C --> M[Microsoft Graph]
-    C --> P[Allowlisted LAN pages]
-    C --> R[Renderer]
-    R --> S[(Artifact store)]
-    E[Seeed EE04 / ESPHome or native TRMNL] -->|poll latest image| C
-    C -->|1-bit 800x480 BMP| E
-    E -->|native API telemetry| H
-```
-
-The device always initiates network traffic. The controller does not depend on
-being able to open a connection to a sleeping ESP32.
+See the [implemented architecture diagram](../README.md#how-the-app-works).
+Allowlisted page capture and a native TRMNL adapter would extend the controller
+without changing the thin-display boundary. The device initiates its Inkboard
+requests; image delivery does not depend on opening a connection to a sleeping ESP32.
 
 ## 3. Hardware baseline
 

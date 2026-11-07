@@ -33,7 +33,7 @@ export default defineWidget({
     lists: Type.Optional(
       TodoListIdsSchema({
         title: "Lists",
-        description: "Leave all unticked to use the lists chosen in the Microsoft To Do card.",
+        description: "Choose the lists for this widget only.",
       }),
     ),
     hideDueDates: Type.Optional(Type.Boolean({ title: "Hide due dates" })),
@@ -53,7 +53,7 @@ export default defineWidget({
     if (!todo.configured) {
       return null;
     }
-    const tasks = await todo.getTasks(config.lists);
+    const tasks = await todo.getTasks(config.lists ?? []);
     const showListNames = config.showListNames ?? "auto";
     return {
       tasks: tasks.slice(0, config.maxItems),
@@ -72,7 +72,12 @@ export default defineWidget({
   },
   render: (config, data, box, { timeZone, now, availableHeight }) => {
     if (data === null || data.tasks.length === 0) {
-      const message = data === null ? "Microsoft To Do not connected" : "All done";
+      const message =
+        data === null
+          ? "Microsoft To Do not connected"
+          : (config.lists ?? []).length === 0
+            ? "Choose lists in this widget's settings"
+            : "All done";
       return `<line x1="0" y1="0" x2="${box.width}" y2="0" stroke="black" stroke-width="1"/>${svgText(12, 28, message, 20)}`;
     }
     const { shown, hidden } = fit(data, availableHeight);

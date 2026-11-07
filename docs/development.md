@@ -1,5 +1,9 @@
 # Develop Inkboard
 
+See the [README architecture diagram](../README.md#how-the-app-works) for the
+hosting, widget-rendering, and display-request flow, or the
+[current system design](system-design.md#current-implementation) for implementation details.
+
 ## Repository layout
 
 | Path                    | Contents                                                |
@@ -95,11 +99,10 @@ Widgets are plugins under `apps/controller/src/widgets/<type>/`. See
 - `GET /api/v1/admin/widgets`
 - `GET /api/v1/admin/entities?domain=sensor`
 - `GET|POST /api/v1/admin/screens`, `GET|PUT|DELETE /api/v1/admin/screens/:screenId`
-- `POST /api/v1/admin/screens/:screenId/customize` (Calendar and To Do built-ins)
 - `GET /api/v1/admin/screens/:screenId/preview.bmp`, `POST /api/v1/admin/screens/preview.bmp`
 - `PUT /api/v1/admin/rotation`, `PUT /api/v1/admin/schedules`, `PUT /api/v1/admin/quiet-hours`
 - `PUT /api/v1/admin/test-pattern`
-- `GET|PUT /api/v1/admin/calendars`
+- `GET|PUT /api/v1/admin/calendars` (legacy selection API; widget instances own selections)
 - `GET /api/v1/admin/microsoft-todo`, `PUT .../settings`, `POST|DELETE .../sign-in`,
   `POST .../sign-out`, `GET|PUT .../lists`
 - `GET /api/v1/device/image.bmp` and `POST /api/v1/device/check-in` (device
@@ -109,3 +112,8 @@ Widgets are plugins under `apps/controller/src/widgets/<type>/`. See
 
 In the App, admin endpoints are served only through ingress; port 8100 serves
 only `/health` and `/api/v1/device`.
+
+Content screens all use the widget registry and standard screen CRUD endpoints.
+Existing fixed-layout screens and inherited widget selections migrate
+automatically. Backups export version 2 with per-widget selections and still
+accept version 1, materializing its page-wide selections into widget settings.

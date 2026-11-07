@@ -1,9 +1,12 @@
 # Writing widgets
 
 A widget is a self-contained plugin in its own folder. The controller discovers
-it at startup, validates its settings, gives it data, and draws it on custom
+it at startup, validates its settings, gives it data, and draws it on editable
 screens. The admin editor builds the widget's settings form from its schema, so
 a new widget needs no changes anywhere else.
+
+For hosting, shared connections, and device delivery, see the
+[README architecture diagram](../README.md#how-the-app-works).
 
 ## Quick start
 
@@ -97,21 +100,27 @@ code) or existing screens will show an "invalid settings" error box.
 
 ### Services available in `load`
 
-| Service                                 | Description                                                              |
-| --------------------------------------- | ------------------------------------------------------------------------ |
-| `homeAssistant.getState(entityId)`      | Entity state, unit, and friendly name, or `null`; cached, last good kept |
-| `homeAssistant.configured`              | False when no Home Assistant connection is configured                    |
-| `homeAssistant.getLocation()`           | Home latitude, longitude, and temperature unit, or `null`                |
-| `calendar.getEvents(entityIds?)`        | Upcoming events from the admin's calendars, or from the given calendars  |
-| `calendar.getEventsBetween(s, e, ids?)` | Events in a date range, such as a whole month; cached, last good kept    |
-| `todo.getTasks(listIds?)`               | Open Microsoft To Do tasks from the card's lists, or the given lists     |
-| `todo.configured`                       | False until Microsoft To Do is signed in                                 |
-| `fetchJson(url, { ttlSeconds })`        | Cached JSON GET (http/https, 10 s timeout, 256 KB limit, last good kept) |
-| `timeZone`, `now`                       | Configured time zone and render time                                     |
+| Service                                | Description                                                                 |
+| -------------------------------------- | --------------------------------------------------------------------------- |
+| `homeAssistant.getState(entityId)`     | Entity state, unit, and friendly name, or `null`; cached, last good kept    |
+| `homeAssistant.configured`             | False when no Home Assistant connection is configured                       |
+| `homeAssistant.getLocation()`          | Home latitude, longitude, and temperature unit, or `null`                   |
+| `calendar.getEvents(entityIds)`        | Upcoming events from this widget's selected calendars; empty means none     |
+| `calendar.getEventsBetween(s, e, ids)` | Events in a date range from this widget's calendars; cached, last good kept |
+| `todo.getTasks(listIds)`               | Open Microsoft To Do tasks from this widget's lists; empty means none       |
+| `todo.configured`                      | False until Microsoft To Do is signed in                                    |
+| `fetchJson(url, { ttlSeconds })`       | Cached JSON GET (http/https, 10 s timeout, 256 KB limit, last good kept)    |
+| `timeZone`, `now`                      | Configured time zone and render time                                        |
 
 Widgets never receive tokens or credentials. Sending the home location to an
 outside service, as the month calendar's weather does, must be an opt-in
 setting.
+
+All widgets use the same registry, schema-driven editor, and rendering lifecycle.
+Each screen stores the settings of each widget instance; there are no page-wide
+calendar or To Do selections to inherit. Connections and credentials remain
+shared and are managed under **Connections**. For optional selection properties
+in older screens, pass `config.calendars ?? []` or `config.lists ?? []`.
 
 The `height` and `render` environment also includes `availableHeight`, the
 pixels left on the screen below the widget's top edge. List widgets use it to
@@ -171,7 +180,7 @@ describe("outdoor widget", () => {
 
 Every widget folder is also covered by the conformance test in
 `widgets/widgets.test.ts`, which renders each widget's default settings. Add
-your widget's `type` to its `BUILT_IN` list.
+your widget's `type` to its `WIDGET_TYPES` list.
 
 Run `npm test`, then preview the widget in the admin page with **New screen**.
 

@@ -332,7 +332,7 @@ describe("Microsoft To Do", () => {
     const preview = await app.inject({
       method: "POST",
       url: "/api/v1/admin/screens/preview.bmp",
-      payload: { name: "Tasks", widgets: [{ type: "todo", maxItems: 2 }] },
+      payload: { name: "Tasks", widgets: [{ type: "todo", maxItems: 2, lists: ["list-tasks"] }] },
     });
     expect(preview.statusCode).toBe(200);
 
@@ -351,7 +351,7 @@ describe("Microsoft To Do", () => {
       url: "/api/v1/admin/microsoft-todo/sign-out",
     });
     expect(signedOut.json()).toMatchObject({ state: "signed_out", account: null, taskCount: 0 });
-    expect(await screenIds(app)).toEqual(["orientation"]);
+    expect(await screenIds(app)).toEqual(["todo", "orientation"]);
     await app.close();
     expect(await readDataFiles(dataDirectory)).not.toContain("Pay rent");
   });
@@ -377,7 +377,7 @@ describe("Microsoft To Do", () => {
     const tasks = await app.inject({
       method: "POST",
       url: "/api/v1/admin/screens/preview.bmp",
-      payload: { name: "Tasks", widgets: [{ type: "todo", maxItems: 5 }] },
+      payload: { name: "Tasks", widgets: [{ type: "todo", maxItems: 5, lists: ["list-tasks"] }] },
     });
     expect(tasks.statusCode).toBe(200);
     expect(ms.state.refreshCalls).toBe(1);
@@ -388,7 +388,7 @@ describe("Microsoft To Do", () => {
     await app.inject({
       method: "POST",
       url: "/api/v1/admin/screens/preview.bmp",
-      payload: { name: "Tasks", widgets: [{ type: "todo", maxItems: 5 }] },
+      payload: { name: "Tasks", widgets: [{ type: "todo", maxItems: 5, lists: ["list-tasks"] }] },
     });
     expect(ms.state.refreshCalls).toBe(2);
 
@@ -398,7 +398,7 @@ describe("Microsoft To Do", () => {
     await app.inject({
       method: "POST",
       url: "/api/v1/admin/screens/preview.bmp",
-      payload: { name: "Tasks", widgets: [{ type: "todo", maxItems: 5 }] },
+      payload: { name: "Tasks", widgets: [{ type: "todo", maxItems: 5, lists: ["list-tasks"] }] },
     });
     const outage = await status(app);
     expect(outage).toMatchObject({ state: "signed_in", taskCount: 3 });
@@ -411,7 +411,7 @@ describe("Microsoft To Do", () => {
     await app.inject({
       method: "POST",
       url: "/api/v1/admin/screens/preview.bmp",
-      payload: { name: "Tasks", widgets: [{ type: "todo", maxItems: 5 }] },
+      payload: { name: "Tasks", widgets: [{ type: "todo", maxItems: 5, lists: ["list-tasks"] }] },
     });
     const revoked = await status(app);
     expect(revoked).toMatchObject({ state: "reauth_required", taskCount: 3 });
@@ -427,7 +427,7 @@ describe("Microsoft To Do", () => {
 });
 
 describe("Microsoft To Do helpers", () => {
-  it("replaces the built-in To Do screen with an editable copy and back", async () => {
+  it("edits the To Do screen directly and never recreates it after deletion", async () => {
     const dataDirectory = await newDataDirectory();
     const ms = microsoft();
     const clock = { now: new Date("2026-11-06T12:00:00Z") };
@@ -442,43 +442,64 @@ describe("Microsoft To Do helpers", () => {
       payload: { screenIds: ["todo", "orientation"], intervalMinutes: 15 },
     });
     const listed = await app.inject({ method: "GET", url: "/api/v1/admin/screens" });
-    expect(listed.json<{ screens: { id: string; customizable?: boolean }[] }>().screens).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: "todo", customizable: true })]),
+    expect(listed.json<{ screens: { id: string; kind: string }[] }>().screens).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "todo", kind: "custom" })]),
     );
     expect(
       (await app.inject({ method: "POST", url: "/api/v1/admin/screens/orientation/customize" }))
         .statusCode,
-    ).toBe(400);
+    ).toBe(404);
 
-    const customized = await app.inject({
-      method: "POST",
-      url: "/api/v1/admin/screens/todo/customize",
+    const editable = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/screens/todo",
     });
-    expect(customized.statusCode).toBe(200);
-    const copy = customized.json<{ id: string; name: string; widgets: { type: string }[] }>();
+    expect(editable.statusCode).toBe(200);
+    const copy = editable.json<{ id: string; name: string; widgets: { type: string }[] }>();
     expect(copy.name).toBe("To Do");
     expect(copy.widgets).toMatchObject([
       { type: "heading", text: "To Do", size: "medium" },
-      { type: "todo", maxItems: 10, lists: [], hideDueDates: false, showListNames: "auto" },
+      {
+        type: "todo",
+        maxItems: 10,
+        lists: ["list-tasks"],
+        hideDueDates: false,
+        showListNames: "auto",
+      },
     ]);
-    // Customizing again returns the same copy.
-    const again = await app.inject({ method: "POST", url: "/api/v1/admin/screens/todo/customize" });
-    expect(again.json<{ id: string }>().id).toBe(copy.id);
+    const updated = await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/screens/todo",
+      payload: {
+        name: "Groceries",
+        widgets: [{ type: "todo", maxItems: 5, lists: ["list-groceries"] }],
+      },
+    });
+    expect(updated.statusCode).toBe(200);
+    await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/microsoft-todo/lists",
+      payload: { listIds: [] },
+    });
+    expect(
+      (await app.inject({ method: "GET", url: "/api/v1/admin/screens/todo" })).json(),
+    ).toMatchObject({ widgets: [{ lists: ["list-groceries"] }] });
 
     const after = await app.inject({ method: "GET", url: "/api/v1/admin/screens" });
     const body = after.json<{ screens: { id: string }[]; rotation: { screenIds: string[] } }>();
-    expect(body.screens.map((screen) => screen.id)).toEqual(["orientation", copy.id]);
+    expect(body.screens.map((screen) => screen.id)).toEqual([copy.id, "orientation"]);
     expect(body.rotation.screenIds).toEqual([copy.id, "orientation"]);
     expect(await checkIn(app, authorization)).toBe(copy.id);
 
-    // Deleting the copy brings the built-in back in its places.
+    // Deleting is permanent, including after signing in again.
     await app.inject({ method: "DELETE", url: `/api/v1/admin/screens/${copy.id}` });
     const restored = await app.inject({ method: "GET", url: "/api/v1/admin/screens" });
     expect(restored.json<{ rotation: { screenIds: string[] } }>().rotation.screenIds).toEqual([
-      "todo",
       "orientation",
     ]);
-    expect(await checkIn(app, authorization)).toBe("todo");
+    expect(await checkIn(app, authorization)).toBe("orientation");
+    await signIn(app, clock);
+    expect(await screenIds(app)).toEqual(["orientation"]);
     await app.close();
   });
   it("lets a widget show lists other than the admin selection", async () => {

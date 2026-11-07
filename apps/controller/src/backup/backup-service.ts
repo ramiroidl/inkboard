@@ -7,12 +7,10 @@ import type {
   ScheduleRuleInput,
 } from "@inkboard/contracts";
 
-import type { CalendarService } from "../calendar/calendar-service.js";
-import type { ScreenService } from "../screens/screen-service.js";
-import type { TodoService } from "../todo/todo-service.js";
+import { materializeWidgetSelections, type ScreenService } from "../screens/screen-service.js";
 
 export const BACKUP_FORMAT = "inkboard-backup";
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 
 export class InvalidBackupError extends Error {}
 
@@ -32,8 +30,6 @@ function sameWidgets(left: unknown, right: unknown): boolean {
 export class BackupService {
   public constructor(
     private readonly screenService: ScreenService,
-    private readonly calendarService: CalendarService,
-    private readonly todoService: TodoService | null,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -56,50 +52,52 @@ export class BackupService {
       })),
       quietHours: this.screenService.getQuietHours(),
       testPatternHidden: this.screenService.isTestPatternHidden(),
-      calendars: this.calendarService.getStatus().entityIds,
-      todoLists: this.todoService?.getStatus().selectedListIds ?? [],
+      calendars: [],
+      todoLists: [],
     };
   }
 
   /**
    * Adds the backup's screens and applies its settings. Screens that already exist with the
    * same name and widgets are reused, so importing twice does not duplicate them. Rotation
-   * and schedule entries for screens that are not available here, such as To Do before
-   * signing in, are skipped with a warning.
+   * and schedule entries for missing screens are skipped with a warning. Connections are
+   * independent of screens and are not changed by imports.
    */
   public async import(backup: InkboardBackup): Promise<InkboardBackupImportResult> {
-    if (backup.format !== BACKUP_FORMAT || backup.version !== BACKUP_VERSION) {
+    if (
+      backup.format !== BACKUP_FORMAT ||
+      (backup.version !== 1 && backup.version !== BACKUP_VERSION)
+    ) {
       throw new InvalidBackupError("This file is not an Inkboard backup");
     }
     const warnings: string[] = [];
 
-    if (backup.calendars.length > 0) {
-      try {
-        await this.calendarService.setSelection(backup.calendars);
-      } catch (error: unknown) {
-        warnings.push(`Calendars were not imported: ${describe(error)}`);
-      }
-    }
-    if (backup.todoLists.length > 0) {
-      if (this.todoService === null) {
-        warnings.push("To Do lists were not imported: Microsoft To Do is unavailable");
-      } else {
-        try {
-          await this.todoService.setSelection(backup.todoLists);
-        } catch (error: unknown) {
-          warnings.push(`To Do lists were not imported: ${describe(error)}`);
+    const screens = [...backup.screens];
+    if (backup.version === 1) {
+      const references = new Set([
+        ...backup.rotation.screenIds,
+        ...backup.schedules.map((rule) => rule.screenId),
+      ]);
+      for (const id of ["calendar", "todo"] as const) {
+        if (references.has(id) && !screens.some((screen) => screen.id === id)) {
+          screens.push({
+            id,
+            ...this.screenService.legacyScreenInput(id, backup.calendars, backup.todoLists),
+          });
         }
       }
     }
-
     const existing = this.screenService.listCustomScreens();
     const idMap = new Map<string, string>();
     let created = 0;
     let reused = 0;
-    for (const screen of backup.screens) {
+    for (const screen of screens) {
+      const widgets =
+        backup.version === 1
+          ? materializeWidgetSelections(screen.widgets, backup.calendars, backup.todoLists)
+          : screen.widgets;
       const match = existing.find(
-        (candidate) =>
-          candidate.name === screen.name && sameWidgets(candidate.widgets, screen.widgets),
+        (candidate) => candidate.name === screen.name && sameWidgets(candidate.widgets, widgets),
       );
       if (match !== undefined) {
         idMap.set(screen.id, match.id);
@@ -107,7 +105,7 @@ export class BackupService {
         continue;
       }
       try {
-        const input: CustomScreenInput = { name: screen.name, widgets: screen.widgets };
+        const input: CustomScreenInput = { name: screen.name, widgets };
         idMap.set(screen.id, this.screenService.createCustomScreen(input).id);
         created += 1;
       } catch (error: unknown) {

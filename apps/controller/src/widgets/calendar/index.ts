@@ -26,7 +26,7 @@ export default defineWidget({
     calendars: Type.Optional(
       EntityIdListSchema({
         title: "Calendars",
-        description: "Leave all unticked to use the calendars chosen in the Home Assistant card.",
+        description: "Choose the calendars for this widget only.",
         domains: ["calendar"],
       }),
     ),
@@ -34,15 +34,20 @@ export default defineWidget({
   defaultConfig: { maxEvents: 4, calendars: [] },
   load: async (config, { calendar }) =>
     calendar.configured
-      ? (await calendar.getEvents(config.calendars)).slice(0, config.maxEvents)
+      ? (await calendar.getEvents(config.calendars ?? [])).slice(0, config.maxEvents)
       : null,
   height: (_config, events, _width, { availableHeight }) =>
     events === null || events.length === 0
       ? ROW_HEIGHT
       : fitEvents(events, availableHeight).length * ROW_HEIGHT,
-  render: (_config, events, box, { timeZone, now, availableHeight }) => {
+  render: (config, events, box, { timeZone, now, availableHeight }) => {
     if (events === null || events.length === 0) {
-      const message = events === null ? "Home Assistant not configured" : "No upcoming events";
+      const message =
+        events === null
+          ? "Home Assistant not configured"
+          : (config.calendars ?? []).length === 0
+            ? "Choose calendars in this widget's settings"
+            : "No upcoming events";
       return `<line x1="0" y1="0" x2="${box.width}" y2="0" stroke="black" stroke-width="1"/>${svgText(12, 30, message, 20)}`;
     }
     return fitEvents(events, availableHeight)

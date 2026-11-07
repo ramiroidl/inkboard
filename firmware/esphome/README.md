@@ -25,7 +25,7 @@ Device Builder. The secrets this configuration needs are listed in
 | `inkboard_api_encryption_key` | A random 32-byte base64 key (`openssl rand -base64 32`)                                                                    |
 | `inkboard_fallback_password`  | At least eight characters, for the setup hotspot                                                                           |
 | `inkboard_controller_url`     | `http://<home-assistant-ip>:8100`, or `http://<computer-ip>:8099` when running [without the App](../../docs/standalone.md) |
-| `inkboard_device_api_token`   | The token on the Inkboard page's **Display setup** card                                                                    |
+| `inkboard_device_api_token`   | The token under **Connections → Display setup** on the Inkboard page                                                       |
 
 Never use `localhost` in `inkboard_controller_url`; on the display it refers to
 the display itself. Do not commit `secrets.yaml`; it is listed in
@@ -48,15 +48,37 @@ Invoke-WebRequest http://<home-assistant-ip>:8100/api/v1/device/image.bmp `
 
 After the first boot, the ESPHome logs show the Wi-Fi connection, a battery
 sample, an image download, one full e-paper refresh, and a device check-in. The
-first image is the test pattern: a white background with a black square at the
+first image is the current screen, or the test pattern when no content screen
+is configured: a white background with a black square at the
 top left, an outlined circle at the top right, a triangle at the bottom left,
 nested rectangles at the bottom right, and readable text in the center. If an
 build shows reversed colors, press **Inkboard OG Force Redraw** once. If that does
-not help, tick **Invert colors** on the display's card on the Inkboard page.
+not help, expand **Device details and display settings** on the display's card
+and tick **Invert colors**.
+
+## Controller, widgets, and network connections
+
+The [README architecture diagram](../../README.md#how-the-app-works) shows the
+complete application. The controller can run as a Home Assistant App (device
+port 8100) or standalone Docker service (port 8099). Use the host's LAN address
+in `inkboard_controller_url`, not a Home Assistant ingress URL.
+
+The firmware initiates `GET /api/v1/device/image.bmp?device=<device_name>` and
+`POST /api/v1/device/check-in`, authenticated with the device bearer token.
+The controller owns widgets, their per-instance settings, source connections,
+rendering, rotation, and schedules. The firmware receives only the resulting
+BMP and refresh timing; changing a calendar selection or To Do widget option
+does not require reflashing.
+
+The encrypted ESPHome API connection to Home Assistant is separate: it exposes
+telemetry, maintenance mode, and control buttons. Its encryption key is not
+the Inkboard HTTP device token. Inkboard does not push images to a sleeping
+display; the next wake or button press pulls the latest screen.
 
 ## Device status and buttons
 
-The administration page shows the latest check-in, including firmware version,
+Expand **Device details and display settings** on the administration page to
+see the latest check-in, including firmware version,
 battery voltage, Wi-Fi RSSI, wake reason, and display result. The controller
 keeps the latest state and check-in history in the persistent `/data` database.
 

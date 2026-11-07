@@ -67,16 +67,13 @@ const SCHEDULES_KEY = "schedules";
 const QUIET_HOURS_KEY = "quietHours";
 const TEST_PATTERN_HIDDEN_KEY = "testPatternHidden";
 const CUSTOMIZED_BUILTINS_KEY = "customizedBuiltins";
+const INSTANCE_SELECTIONS_KEY = "widgetInstanceSelections";
+const MIGRATED_SCREENS_KEY = "migratedScreenTemplates";
 
-type CustomizableScreenId = "calendar" | "todo";
+type LegacyScreenId = "calendar" | "todo";
 
-function isCustomizable(screenId: string): screenId is CustomizableScreenId {
-  return screenId === "calendar" || screenId === "todo";
-}
-
-/** Widgets that recreate each customizable built-in screen; defaults fill other settings. */
-const BUILTIN_TEMPLATES: Record<
-  CustomizableScreenId,
+const LEGACY_TEMPLATES: Record<
+  LegacyScreenId,
   { name: string; widgets: (Record<string, unknown> & { type: string })[] }
 > = {
   calendar: {
@@ -131,26 +128,36 @@ export const QuietHoursSchema = Type.Object(
   { additionalProperties: false },
 );
 
-const BUILTIN_SCREENS: Record<"calendar" | "todo" | "orientation", ScreenSummary> = {
-  calendar: {
-    id: "calendar",
-    name: "Calendar",
-    description: "Upcoming Home Assistant calendar events",
-    kind: "builtin",
-  },
-  todo: {
-    id: "todo",
-    name: "To Do",
-    description: "Open Microsoft To Do tasks",
-    kind: "builtin",
-  },
-  orientation: {
-    id: "orientation",
-    name: "Test pattern",
-    description: "Orientation and polarity test target",
-    kind: "builtin",
-  },
+const TEST_PATTERN: ScreenSummary = {
+  id: "orientation",
+  name: "Test pattern",
+  description: "Orientation and polarity test target",
+  kind: "diagnostic",
 };
+
+/** Freeze the inherited selections in screens and backups from before instance settings. */
+export function materializeWidgetSelections(
+  widgets: ScreenWidget[],
+  calendars: string[],
+  lists: string[],
+): ScreenWidget[] {
+  return widgets.map((widget) => {
+    const setting =
+      widget.type === "calendar" || widget.type === "calendar_month"
+        ? "calendars"
+        : widget.type === "todo"
+          ? "lists"
+          : null;
+    if (setting === null) {
+      return widget;
+    }
+    const value = widget[setting];
+    if (value !== undefined && (!Array.isArray(value) || value.length > 0)) {
+      return widget;
+    }
+    return { ...widget, [setting]: [...(setting === "calendars" ? calendars : lists)] };
+  });
+}
 
 export class ScreenNotFoundError extends Error {}
 export class InvalidRotationError extends Error {}
@@ -171,74 +178,117 @@ export class ScreenService {
     private readonly todoService: TodoService | null = null,
   ) {}
 
+  public initialize(): void {
+    this.database.raw.transaction(() => {
+      if (!this.readSetting(INSTANCE_SELECTIONS_KEY, false)) {
+        for (const screen of this.listCustomScreens()) {
+          const widgets = materializeWidgetSelections(
+            screen.widgets,
+            this.calendarService.getStatus().entityIds,
+            this.todoService?.getStatus().selectedListIds ?? [],
+          );
+          if (JSON.stringify(widgets) !== JSON.stringify(screen.widgets)) {
+            this.database.orm
+              .update(customScreens)
+              .set({ widgetsJson: JSON.stringify(widgets) })
+              .where(eq(customScreens.id, screen.id))
+              .run();
+          }
+        }
+        this.writeSetting(INSTANCE_SELECTIONS_KEY, true);
+      }
+      this.migrateLegacyScreens();
+    })();
+  }
+
   public listScreens(): ScreenSummary[] {
-    const customized = this.customizedBuiltins();
+    this.migrateLegacyScreens();
     const custom = this.listCustomScreens().map((screen): ScreenSummary => ({
       id: screen.id,
       name: screen.name,
       description: this.describeWidgets(screen.widgets),
       kind: "custom",
     }));
-    const content = [
-      ...(this.calendarService.getStatus().configured && customized.calendar === undefined
-        ? [{ ...BUILTIN_SCREENS.calendar, customizable: true }]
-        : []),
-      ...(this.todoService?.isAvailable() === true && customized.todo === undefined
-        ? [{ ...BUILTIN_SCREENS.todo, customizable: true }]
-        : []),
-    ];
+    const migrated = Object.values(
+      this.readSetting<Partial<Record<LegacyScreenId, string>>>(MIGRATED_SCREENS_KEY, {}),
+    );
+    const content = custom.filter((screen) => migrated.includes(screen.id));
     // The test pattern stays as a fallback so a display always has a screen.
-    const showTestPattern = !this.isTestPatternHidden() || content.length + custom.length === 0;
-    return [...content, ...(showTestPattern ? [BUILTIN_SCREENS.orientation] : []), ...custom];
+    const showTestPattern = !this.isTestPatternHidden() || custom.length === 0;
+    return [
+      ...content,
+      ...(showTestPattern ? [TEST_PATTERN] : []),
+      ...custom.filter((screen) => !migrated.includes(screen.id)),
+    ];
   }
 
-  /** Built-in screens replaced by an editable copy, limited to copies that still exist. */
-  private customizedBuiltins(): Partial<Record<CustomizableScreenId, string>> {
-    const stored = this.readSetting<Partial<Record<CustomizableScreenId, string>>>(
+  private migrateLegacyScreens(): void {
+    const migrated = this.readSetting<Partial<Record<LegacyScreenId, string>>>(
+      MIGRATED_SCREENS_KEY,
+      {},
+    );
+    const customized = this.readSetting<Partial<Record<LegacyScreenId, string>>>(
       CUSTOMIZED_BUILTINS_KEY,
       {},
     );
     const existing = new Set(this.listCustomScreens().map((screen) => screen.id));
-    return Object.fromEntries(
-      Object.entries(stored).filter(
-        ([, screenId]) => screenId !== undefined && existing.has(screenId),
-      ),
-    );
+    this.database.raw.transaction(() => {
+      for (const screenId of ["calendar", "todo"] as const) {
+        if (migrated[screenId] !== undefined) {
+          continue;
+        }
+        const copyId = customized[screenId];
+        if (copyId !== undefined && existing.has(copyId)) {
+          migrated[screenId] = copyId;
+          this.replaceScreenReferences(screenId, copyId);
+        } else if (
+          screenId === "calendar"
+            ? this.calendarService.getStatus().configured
+            : this.todoService?.isAvailable() === true
+        ) {
+          const input = this.legacyScreenInput(
+            screenId,
+            this.calendarService.getStatus().entityIds,
+            this.todoService?.getStatus().selectedListIds ?? [],
+          );
+          const now = this.now().toISOString();
+          this.database.orm
+            .insert(customScreens)
+            .values({
+              id: screenId,
+              name: input.name,
+              widgetsJson: JSON.stringify(input.widgets),
+              createdAt: now,
+              updatedAt: now,
+            })
+            .onConflictDoNothing()
+            .run();
+          migrated[screenId] = screenId;
+        } else {
+          continue;
+        }
+        this.writeSetting(MIGRATED_SCREENS_KEY, migrated);
+      }
+    })();
   }
 
-  /**
-   * Replaces a built-in screen with an editable screen made of widgets, so each part can be
-   * configured. Rotation, schedules, and displays showing the built-in switch to the copy.
-   * Deleting the copy brings the built-in back.
-   */
-  public customizeBuiltin(screenId: string): CustomScreen {
-    if (!isCustomizable(screenId)) {
-      throw new ScreenNotFoundError(`Screen ${screenId} cannot be customized`);
-    }
-    const existing = this.customizedBuiltins()[screenId];
-    if (existing !== undefined) {
-      return this.getCustomScreen(existing);
-    }
-    if (!this.isAvailable(screenId)) {
-      throw new ScreenNotFoundError(`Screen ${screenId} is not available`);
-    }
-    const template = BUILTIN_TEMPLATES[screenId];
-    const widgets = template.widgets.map((widget): ScreenWidget => {
+  /** Reconstructs a screen omitted from older backups because it had a fixed layout. */
+  public legacyScreenInput(
+    screenId: LegacyScreenId,
+    calendars: string[],
+    lists: string[],
+  ): CustomScreenInput {
+    const template = LEGACY_TEMPLATES[screenId];
+    const widgets = template.widgets.map((widget) => {
       const definition = this.widgetRegistry.get(widget.type);
-      return {
-        ...(definition === undefined ? {} : structuredClone(definition.defaultConfig)),
-        ...widget,
-      };
+      if (definition === undefined) {
+        throw new Error(
+          `Cannot migrate screen ${screenId}: widget ${widget.type} is not installed`,
+        );
+      }
+      return { ...structuredClone(definition.defaultConfig), ...widget };
     });
-    const copy = this.createCustomScreen({ name: template.name, widgets });
-    this.database.raw.transaction(() => {
-      this.replaceScreenReferences(screenId, copy.id);
-      this.writeSetting(CUSTOMIZED_BUILTINS_KEY, {
-        ...this.readSetting<Record<string, string>>(CUSTOMIZED_BUILTINS_KEY, {}),
-        [screenId]: copy.id,
-      });
-    })();
-    return copy;
+    return { name: template.name, widgets: materializeWidgetSelections(widgets, calendars, lists) };
   }
 
   /** Points rotation, schedules, and displays at another screen. */
@@ -364,10 +414,6 @@ export class ScreenService {
   }
 
   public deleteCustomScreen(screenId: string): void {
-    // Deleting a customized built-in hands its places back to the built-in screen.
-    const builtin = Object.entries(
-      this.readSetting<Record<string, string>>(CUSTOMIZED_BUILTINS_KEY, {}),
-    ).find(([, copyId]) => copyId === screenId)?.[0];
     this.database.raw.transaction(() => {
       const result = this.database.orm
         .delete(customScreens)
@@ -375,13 +421,6 @@ export class ScreenService {
         .run();
       if (result.changes === 0) {
         throw new ScreenNotFoundError(`Screen ${screenId} was not found`);
-      }
-      if (builtin !== undefined) {
-        const remaining = this.readSetting<Record<string, string>>(CUSTOMIZED_BUILTINS_KEY, {});
-        delete remaining[builtin];
-        this.writeSetting(CUSTOMIZED_BUILTINS_KEY, remaining);
-        this.replaceScreenReferences(screenId, builtin);
-        return;
       }
       const rotation = this.readRotation();
       this.writeRotation({
@@ -665,12 +704,6 @@ export class ScreenService {
   }
 
   public async getArtifact(screenId: ScreenId): Promise<ArtifactRecord> {
-    if (screenId === "calendar") {
-      return this.calendarService.getCurrentArtifact();
-    }
-    if (screenId === "todo" && this.todoService !== null) {
-      return this.todoService.getCurrentArtifact();
-    }
     if (screenId === "orientation") {
       return this.artifactService.getOrientationArtifact();
     }

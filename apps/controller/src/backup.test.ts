@@ -34,6 +34,81 @@ async function importBackup(app: App, backup: unknown) {
 }
 
 describe("backup", () => {
+  it.each([1, 2] as const)(
+    "imports version %s selections without requiring connections",
+    async (version) => {
+      const app = await createApp();
+      const backup: InkboardBackup = {
+        format: "inkboard-backup",
+        version,
+        exportedAt: "2026-11-06T12:00:00Z",
+        screens: [
+          {
+            id: "screen_old",
+            name: "Dashboard",
+            widgets: [
+              { type: "calendar", maxEvents: 4, calendars: [] },
+              { type: "todo", maxItems: 5 },
+              { type: "todo", maxItems: 5, lists: ["other"] },
+            ],
+          },
+        ],
+        rotation: {
+          screenIds: version === 1 ? ["calendar", "todo", "screen_old"] : ["screen_old"],
+          intervalMinutes: 15,
+        },
+        schedules: [],
+        quietHours: { enabled: false, start: "22:00", end: "07:00" },
+        testPatternHidden: true,
+        calendars: ["calendar.family"],
+        todoLists: ["tasks"],
+      };
+      const imported = await importBackup(app, backup);
+      expect(imported.statusCode).toBe(200);
+      expect(imported.json()).toMatchObject({
+        screensCreated: version === 1 ? 3 : 1,
+        warnings: [],
+      });
+      const exported = (
+        await app.inject({ method: "GET", url: "/api/v1/admin/backup" })
+      ).json<InkboardBackup>();
+      expect(exported).toMatchObject({ version: 2, calendars: [], todoLists: [] });
+      const widgets = exported.screens.find((screen) => screen.name === "Dashboard")!.widgets;
+      expect(widgets).toEqual([
+        { type: "calendar", maxEvents: 4, calendars: version === 1 ? ["calendar.family"] : [] },
+        { type: "todo", maxItems: 5, ...(version === 1 ? { lists: ["tasks"] } : {}) },
+        { type: "todo", maxItems: 5, lists: ["other"] },
+      ]);
+      if (version === 1) {
+        expect(
+          exported.screens.find((screen) => screen.name === "Calendar")!.widgets,
+        ).toMatchObject([
+          { type: "datetime" },
+          { type: "calendar", calendars: ["calendar.family"] },
+        ]);
+        expect(exported.screens.find((screen) => screen.name === "To Do")!.widgets).toMatchObject([
+          { type: "heading" },
+          { type: "todo", lists: ["tasks"] },
+        ]);
+      }
+      expect((await importBackup(app, backup)).json()).toMatchObject({
+        screensCreated: 0,
+        screensReused: version === 1 ? 3 : 1,
+        warnings: [],
+      });
+      const target = await createApp();
+      expect((await importBackup(target, exported)).json()).toMatchObject({ warnings: [] });
+      const roundTrip = (
+        await target.inject({ method: "GET", url: "/api/v1/admin/backup" })
+      ).json<InkboardBackup>();
+      expect(roundTrip.screens.find((screen) => screen.name === "Dashboard")!.widgets).toEqual(
+        widgets,
+      );
+      await target.close();
+      await app.close();
+    },
+  );
+
   it("moves screens and settings to another controller", async () => {
     const source = await createApp();
     const created = await source.inject({
@@ -69,7 +144,7 @@ describe("backup", () => {
     const backup = exported.json<InkboardBackup>();
     expect(backup).toMatchObject({
       format: "inkboard-backup",
-      version: 1,
+      version: 2,
       screens: [{ id: notesId, name: "Notes" }],
       rotation: { screenIds: [notesId, "orientation"], intervalMinutes: 20 },
       quietHours: { enabled: true, start: "23:00", end: "06:00" },
