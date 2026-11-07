@@ -20,6 +20,7 @@ type FetchImplementation = typeof fetch;
 const SELECTION_KEY = "calendarSelection";
 const SNAPSHOT_KEY_PREFIX = "calendarSnapshot:";
 export const MAX_SELECTED_CALENDARS = 10;
+const MAX_CACHED_RANGES = 20;
 
 /** The last successful fetch of one calendar, persisted so restarts keep the agenda. */
 interface CalendarSnapshot {
@@ -63,6 +64,8 @@ export class CalendarService {
   /** Fetch times and in-flight fetches of calendars used only by widgets. */
   private readonly extraAttempts = new Map<string, number>();
   private readonly extraRefreshes = new Map<string, Promise<void>>();
+  /** Events for date ranges requested by widgets, such as a whole month. */
+  private readonly rangeCache = new Map<string, { events: CalendarEvent[]; fetchedAt: number }>();
   public constructor(
     private readonly config: ControllerConfig,
     private readonly artifactService: ArtifactService,
@@ -276,6 +279,86 @@ export class CalendarService {
     });
     this.extraRefreshes.set(entityId, run);
     return run;
+  }
+
+  /**
+   * Events from `start` to `end`, such as a whole month including past days. Without
+   * `entityIds`, the calendars selected on the admin page are used. Each range is fetched at
+   * most once per refresh interval; when Home Assistant is unavailable, the last events
+   * fetched for the range are returned.
+   */
+  public async getEventsBetween(
+    start: Date,
+    end: Date,
+    entityIds?: string[],
+  ): Promise<CalendarEvent[]> {
+    const client = this.client;
+    const homeAssistant = this.config.homeAssistant;
+    if (client === null || homeAssistant === null) {
+      return [];
+    }
+    const requested = [...new Set(entityIds ?? [])]
+      .filter((entityId) => CALENDAR_ENTITY_PATTERN.test(entityId))
+      .slice(0, MAX_SELECTED_CALENDARS);
+    const calendars = requested.length > 0 ? requested : [...this.selection];
+    if (calendars.length === 0 || !(end.getTime() > start.getTime())) {
+      return [];
+    }
+    const key = `${calendars.join(",")}|${start.toISOString()}|${end.toISOString()}`;
+    const now = this.now().getTime();
+    const cached = this.rangeCache.get(key);
+    if (
+      cached !== undefined &&
+      now - cached.fetchedAt < homeAssistant.refreshIntervalSeconds * 1000
+    ) {
+      return cached.events;
+    }
+
+    if (calendars.some((entityId) => !this.names.has(entityId))) {
+      try {
+        for (const calendar of await client.listCalendars()) {
+          this.names.set(calendar.entityId, calendar.name);
+        }
+      } catch {
+        // Names are cosmetic; the event requests below report connection problems.
+      }
+    }
+    const results = await Promise.allSettled(
+      calendars.map(async (entityId) => {
+        const name = this.nameOf(entityId);
+        return (await client.getEventsBetween(entityId, start, end)).map((event) => ({
+          ...event,
+          calendarName: name,
+        }));
+      }),
+    );
+    const failed = results.filter((result) => result.status === "rejected");
+    if (failed.length === results.length) {
+      const reason = (failed[0] as PromiseRejectedResult).reason as unknown;
+      this.onRefreshError(reason instanceof Error ? reason : new Error(String(reason)));
+      if (cached !== undefined) {
+        // Retry after the next interval instead of on every render.
+        this.rangeCache.set(key, { events: cached.events, fetchedAt: now });
+        return cached.events;
+      }
+      throw reason instanceof Error ? reason : new Error("Calendar events are unavailable");
+    }
+    // A calendar that failed keeps its previous events for this range.
+    const events = mergeCalendarEvents(
+      results.map((result, index) =>
+        result.status === "fulfilled"
+          ? result.value
+          : (cached?.events.filter(
+              (event) => event.calendarName === this.nameOf(calendars[index]!),
+            ) ?? []),
+      ),
+    );
+    this.rangeCache.delete(key);
+    this.rangeCache.set(key, { events, fetchedAt: now });
+    while (this.rangeCache.size > MAX_CACHED_RANGES) {
+      this.rangeCache.delete(this.rangeCache.keys().next().value!);
+    }
+    return events;
   }
 
   public async getCurrentArtifact(): Promise<ArtifactRecord> {

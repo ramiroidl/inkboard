@@ -24,6 +24,15 @@ type FetchImplementation = typeof fetch;
 
 export const ENTITY_ID_PATTERN = /^[a-z_]+\.[a-z0-9_]+$/;
 
+const LOCATION_TTL_MS = 6 * 60 * 60 * 1000;
+
+/** Home Assistant's configured home coordinates, for location-based data like weather. */
+export interface HomeLocation {
+  latitude: number;
+  longitude: number;
+  temperatureUnit: "celsius" | "fahrenheit";
+}
+
 function normalizeState(entityId: string, payload: unknown): EntityState {
   if (typeof payload !== "object" || payload === null) {
     throw new Error(`Home Assistant returned an invalid state for ${entityId}`);
@@ -52,6 +61,7 @@ function normalizeState(entityId: string, payload: unknown): EntityState {
 export class HomeAssistantStateClient {
   private readonly cache = new Map<string, CachedEntityState>();
   private readonly inFlight = new Map<string, Promise<void>>();
+  private location: { value: HomeLocation | null; fetchedAt: number } | undefined;
 
   public constructor(
     private readonly config: HomeAssistantConfig,
@@ -103,6 +113,53 @@ export class HomeAssistantStateClient {
         ];
       })
       .sort((left, right) => left.entityId.localeCompare(right.entityId));
+  }
+
+  /**
+   * Home Assistant's home location and temperature unit, cached for six hours. Returns
+   * null when the configuration has no coordinates or cannot be read.
+   */
+  public async getLocation(): Promise<HomeLocation | null> {
+    const now = this.now().getTime();
+    if (this.location !== undefined && now - this.location.fetchedAt < LOCATION_TTL_MS) {
+      return this.location.value;
+    }
+    let value: HomeLocation | null = this.location?.value ?? null;
+    try {
+      const response = await this.fetchImplementation(
+        homeAssistantApiUrl(this.config.baseUrl, "api/config"),
+        {
+          headers: {
+            Accept: "application/json",
+            Authorization: ["Bearer", this.config.token].join(" "),
+          },
+          signal: AbortSignal.timeout(10_000),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`Home Assistant config request returned HTTP ${response.status}`);
+      }
+      const payload = (await response.json()) as Record<string, unknown>;
+      const units =
+        typeof payload.unit_system === "object" && payload.unit_system !== null
+          ? (payload.unit_system as Record<string, unknown>)
+          : {};
+      value =
+        typeof payload.latitude === "number" &&
+        typeof payload.longitude === "number" &&
+        Number.isFinite(payload.latitude) &&
+        Number.isFinite(payload.longitude)
+          ? {
+              latitude: payload.latitude,
+              longitude: payload.longitude,
+              temperatureUnit: units.temperature === "°F" ? "fahrenheit" : "celsius",
+            }
+          : null;
+    } catch {
+      // Keep the last known location.
+    }
+    this.location = { value, fetchedAt: now };
+    return value;
   }
 
   public async getState(entityId: string): Promise<EntityState | null> {

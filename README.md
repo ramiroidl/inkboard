@@ -5,14 +5,15 @@ Inkboard runs as a Home Assistant App that renders 800×480 black-and-white
 screens, such as your calendar or a Microsoft To Do list, and the display runs
 a small ESPHome firmware that downloads the current screen and sleeps.
 
-- Calendar agendas merged from your Home Assistant calendars
+- Calendar agendas and a whole-month calendar from your Home Assistant calendars
 - Microsoft To Do lists, read-only, with personal or work accounts
 - Custom screens built from widgets: headings, text, dates, Home Assistant
   values, agendas, and task lists
 - Screen rotation, time-of-day schedules, and quiet hours
 - Buttons on the display to switch screens, and battery-friendly deep sleep
 - Everything stays on your network; nothing is sent to a cloud service except
-  Microsoft Graph when you connect To Do
+  Microsoft Graph when you connect To Do, and Open-Meteo when you turn on the
+  month calendar's weather
 
 ## Contents
 
@@ -202,19 +203,29 @@ deletes the tokens and saved tasks.
 Select **New screen** and add up to 12 widgets. The preview is rendered by the
 controller, so it matches the display pixel for pixel.
 
-| Widget               | Shows                                                                             |
-| -------------------- | --------------------------------------------------------------------------------- |
-| Heading              | Large bold title                                                                  |
-| Text                 | Wrapped message, up to six lines                                                  |
-| Date & time          | Date (default), clock, or both; a clock can lag between refreshes                 |
-| Home Assistant value | Any entity's state and unit, such as `sensor.outdoor_temp`; three can share a row |
-| Calendar agenda      | Next events from the card's calendars, or from calendars chosen for this widget   |
-| To Do list           | Open tasks from chosen To Do lists, with optional due dates and list names        |
-| Divider              | Heavy horizontal rule                                                             |
+| Widget               | Shows                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| Heading              | Large bold title                                                                   |
+| Text                 | Wrapped message, up to six lines                                                   |
+| Date & time          | Date (default), clock, or both; a clock can lag between refreshes                  |
+| Home Assistant value | Any entity's state and unit, such as `sensor.outdoor_temp`; three can share a row  |
+| Calendar agenda      | Next events from the card's calendars, or from calendars chosen for this widget    |
+| Month calendar       | The whole month with event names, today marked, past days crossed out, and weather |
+| To Do list           | Open tasks from chosen To Do lists, with optional due dates and list names         |
+| Divider              | Heavy horizontal rule                                                              |
 
 For example, a grocery screen is a **Heading** that says "Groceries" and a
 **To Do list** widget with only **Groceries** ticked and due dates hidden. Lists
 that do not fit end with `+N MORE`.
+
+For a wall calendar, make a screen with only the **Month calendar** widget: on
+its own it fills the whole display, without margins or the screen name. Each
+day shows as many event names as fit, then `+n`. Today has a black bar, past
+days are crossed out (optional), and the week can start on Monday or Sunday.
+Tick **Show weather** for a seven-day forecast in the corner of each day. The
+forecast comes from [Open-Meteo](https://open-meteo.com/) (CC BY 4.0) for Home
+Assistant's home location, rounded to about 1 km, and refreshes hourly; it is
+off by default because it sends that location to Open-Meteo.
 
 Untick **Show the test pattern screen** below the screen list to hide the test
 pattern once you have other screens.
@@ -303,6 +314,9 @@ the error. The display keeps the last good data until the source recovers.
   is created.
 - Your Wi-Fi password and keys live in ESPHome's secrets file, not in the
   device configuration or this repository.
+- The month calendar's weather, when turned on, sends Home Assistant's home
+  location, rounded to about 1 km, to Open-Meteo once an hour. No account or
+  key is involved.
 - Microsoft To Do access is read-only. Tokens are encrypted with AES-256-GCM in
   the App's data folder and never sent to the browser.
 - Screens, settings, and saved data are stored in the App's data folder and

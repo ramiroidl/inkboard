@@ -12,6 +12,7 @@ export { defineWidget } from "./types.js";
 export type {
   CalendarEvent,
   EntityState,
+  HomeLocation,
   TodoTask,
   WidgetBox,
   WidgetDefinition,
@@ -21,9 +22,11 @@ export type {
 export {
   escapeXml,
   estimateTextWidth,
+  eventDateRange,
   fitToWidth,
   formatEventDay,
   formatEventTime,
+  localDateKey,
   truncate,
 } from "../artifacts/calendar-renderer.js";
 export { describeTask, formatDueDate } from "../artifacts/todo-renderer.js";

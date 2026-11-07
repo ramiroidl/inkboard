@@ -161,6 +161,17 @@ export async function renderScreenSvg(
     screen.widgets.map((widget) => resolveWidget(widget, registry, services)),
   );
 
+  // A lone full-screen widget draws on the whole canvas.
+  const only = resolved.length === 1 ? resolved[0]! : null;
+  if (only?.kind === "ok" && only.definition.fullScreen === true) {
+    const fullEnvironment: WidgetEnvironment = { ...environment, availableHeight: HEIGHT };
+    return `
+    <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="${WIDTH}" height="${HEIGHT}" fill="white"/>
+      ${renderCell({ item: only, height: HEIGHT }, 0, 0, WIDTH, HEIGHT, fullEnvironment)}
+    </svg>`;
+  }
+
   let y = MARGIN;
   let omitted = 0;
   const rendered: string[] = [];

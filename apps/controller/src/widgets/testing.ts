@@ -10,7 +10,24 @@ import sharp from "sharp";
 
 import { WidgetRegistry } from "./registry.js";
 import { renderScreenSvg } from "./render.js";
-import type { WidgetDefinition, WidgetServices } from "./types.js";
+import type { CalendarEvent, WidgetDefinition, WidgetServices } from "./types.js";
+
+const TEST_EVENTS: CalendarEvent[] = [
+  {
+    title: "Team meeting",
+    start: "2026-01-15T17:00:00Z",
+    end: "2026-01-15T18:00:00Z",
+    allDay: false,
+    location: null,
+  },
+  {
+    title: "Holiday",
+    start: "2026-01-16",
+    end: "2026-01-17",
+    allDay: true,
+    location: null,
+  },
+];
 
 export function createTestServices(overrides: Partial<WidgetServices> = {}): WidgetServices {
   return {
@@ -24,25 +41,12 @@ export function createTestServices(overrides: Partial<WidgetServices> = {}): Wid
         unit: "°C",
         friendlyName: "Test sensor",
       }),
+      getLocation: async () => ({ latitude: 41.88, longitude: -87.63, temperatureUnit: "celsius" }),
     },
     calendar: {
       configured: true,
-      getEvents: async () => [
-        {
-          title: "Team meeting",
-          start: "2026-01-15T17:00:00Z",
-          end: "2026-01-15T18:00:00Z",
-          allDay: false,
-          location: null,
-        },
-        {
-          title: "Holiday",
-          start: "2026-01-16",
-          end: "2026-01-17",
-          allDay: true,
-          location: null,
-        },
-      ],
+      getEvents: async () => TEST_EVENTS,
+      getEventsBetween: async () => TEST_EVENTS,
     },
     todo: {
       configured: true,

@@ -55,6 +55,7 @@ widgets stay independent of controller internals.
 | `configSchema`  | TypeBox object schema for the settings; must not define `type`              |
 | `defaultConfig` | Settings for a newly added widget; must satisfy the schema                  |
 | `maxPerRow`     | 1–4. Consecutive widgets of this type share a row (default 1)               |
+| `fullScreen`    | Alone on a screen, draw on the whole 800×480 canvas (default false)         |
 | `load`          | Optional async data loading with the provided services                      |
 | `height`        | Pixels needed at a given width                                              |
 | `render`        | SVG fragment for the widget's box                                           |
@@ -96,17 +97,25 @@ code) or existing screens will show an "invalid settings" error box.
 
 ### Services available in `load`
 
-| Service                            | Description                                                              |
-| ---------------------------------- | ------------------------------------------------------------------------ |
-| `homeAssistant.getState(entityId)` | Entity state, unit, and friendly name, or `null`; cached, last good kept |
-| `homeAssistant.configured`         | False when no Home Assistant connection is configured                    |
-| `calendar.getEvents(entityIds?)`   | Upcoming events from the admin's calendars, or from the given calendars  |
-| `todo.getTasks(listIds?)`          | Open Microsoft To Do tasks from the card's lists, or the given lists     |
-| `todo.configured`                  | False until Microsoft To Do is signed in                                 |
-| `fetchJson(url, { ttlSeconds })`   | Cached JSON GET (http/https, 10 s timeout, 256 KB limit, last good kept) |
-| `timeZone`, `now`                  | Configured time zone and render time                                     |
+| Service                                 | Description                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| `homeAssistant.getState(entityId)`      | Entity state, unit, and friendly name, or `null`; cached, last good kept |
+| `homeAssistant.configured`              | False when no Home Assistant connection is configured                    |
+| `homeAssistant.getLocation()`           | Home latitude, longitude, and temperature unit, or `null`                |
+| `calendar.getEvents(entityIds?)`        | Upcoming events from the admin's calendars, or from the given calendars  |
+| `calendar.getEventsBetween(s, e, ids?)` | Events in a date range, such as a whole month; cached, last good kept    |
+| `todo.getTasks(listIds?)`               | Open Microsoft To Do tasks from the card's lists, or the given lists     |
+| `todo.configured`                       | False until Microsoft To Do is signed in                                 |
+| `fetchJson(url, { ttlSeconds })`        | Cached JSON GET (http/https, 10 s timeout, 256 KB limit, last good kept) |
+| `timeZone`, `now`                       | Configured time zone and render time                                     |
 
-Widgets never receive tokens or credentials.
+Widgets never receive tokens or credentials. Sending the home location to an
+outside service, as the month calendar's weather does, must be an opt-in
+setting.
+
+The `height` and `render` environment also includes `availableHeight`, the
+pixels left on the screen below the widget's top edge. List widgets use it to
+show only the rows that fit.
 
 ### Drawing
 

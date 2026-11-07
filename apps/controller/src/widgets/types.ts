@@ -2,9 +2,9 @@ import type { TodoTask } from "@inkboard/contracts";
 import type { Static, TObject } from "@sinclair/typebox";
 
 import type { CalendarEvent } from "../integrations/home-assistant-calendar.js";
-import type { EntityState } from "../integrations/home-assistant-states.js";
+import type { EntityState, HomeLocation } from "../integrations/home-assistant-states.js";
 
-export type { CalendarEvent, EntityState, TodoTask };
+export type { CalendarEvent, EntityState, HomeLocation, TodoTask };
 
 /** Read-only values available while measuring and rendering. */
 export interface WidgetEnvironment {
@@ -29,6 +29,11 @@ export interface WidgetServices extends WidgetEnvironment {
     configured: boolean;
     /** Returns null for unknown entities or when Home Assistant is not configured. */
     getState(entityId: string): Promise<EntityState | null>;
+    /**
+     * Home Assistant's home coordinates and temperature unit, or null when unknown. Sending
+     * them to an outside service shares the home's location; make that an opt-in setting.
+     */
+    getLocation(): Promise<HomeLocation | null>;
   };
   calendar: {
     /** False when Home Assistant is not connected. */
@@ -38,6 +43,12 @@ export interface WidgetServices extends WidgetEnvironment {
      * selected on the admin page; otherwise from the given `calendar.*` entities.
      */
     getEvents(entityIds?: string[]): Promise<CalendarEvent[]>;
+    /**
+     * Events overlapping `start`–`end`, such as a whole month including past days, from the
+     * admin page's calendars or the given `calendar.*` entities. Throws when Home Assistant is
+     * unavailable and nothing was fetched for the range before.
+     */
+    getEventsBetween(start: Date, end: Date, entityIds?: string[]): Promise<CalendarEvent[]>;
   };
   todo: {
     /** False until Microsoft To Do is signed in. */
@@ -85,6 +96,11 @@ export interface WidgetDefinition<TSchema extends TObject = TObject, TData = unk
   defaultConfig: Static<TSchema>;
   /** Consecutive widgets of this type share a row of up to this many cells. Default 1. */
   maxPerRow?: number;
+  /**
+   * When the widget is the only one on a screen, draw it on the whole 800×480 canvas without
+   * margins or the screen-name footer. Default false.
+   */
+  fullScreen?: boolean;
   /** Optional data loading. Errors are shown in place of the widget. */
   load?(config: Static<TSchema>, services: WidgetServices): Promise<TData>;
   /** Height in pixels the widget needs at the given width. */

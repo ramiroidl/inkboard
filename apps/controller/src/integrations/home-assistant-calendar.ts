@@ -109,11 +109,20 @@ export class HomeAssistantCalendarClient {
   public async getEvents(entityId: string, now: Date): Promise<CalendarEvent[]> {
     const end = new Date(now);
     end.setUTCDate(end.getUTCDate() + this.config.lookAheadDays);
+    return this.getEventsBetween(entityId, now, end);
+  }
+
+  /** Events that overlap `start`–`end`, oldest first. */
+  public async getEventsBetween(
+    entityId: string,
+    start: Date,
+    end: Date,
+  ): Promise<CalendarEvent[]> {
     const url = homeAssistantApiUrl(
       this.config.baseUrl,
       `api/calendars/${encodeURIComponent(entityId)}`,
     );
-    url.searchParams.set("start", now.toISOString());
+    url.searchParams.set("start", start.toISOString());
     url.searchParams.set("end", end.toISOString());
 
     const payload = await this.getJson(url);

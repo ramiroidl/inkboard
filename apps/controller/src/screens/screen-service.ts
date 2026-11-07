@@ -590,10 +590,13 @@ export class ScreenService {
         configured: stateClient !== null,
         getState: async (entityId) =>
           stateClient === null ? null : stateClient.getState(entityId),
+        getLocation: async () => (stateClient === null ? null : stateClient.getLocation()),
       },
       calendar: {
         configured: this.calendarService.getStatus().homeAssistantConfigured,
         getEvents: (entityIds) => this.calendarService.getEvents(entityIds),
+        getEventsBetween: (start, end, entityIds) =>
+          this.calendarService.getEventsBetween(start, end, entityIds),
       },
       todo: {
         configured: this.todoService?.isConnected() === true,

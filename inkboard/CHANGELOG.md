@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+- **Month calendar** widget: the whole month with event names, today marked, past days
+  crossed out, and an optional seven-day forecast from Open-Meteo. On its own, it fills
+  the whole display.
+
 ## 0.6.1
 
 - Export and import screens and display settings from the new **Backup** card.

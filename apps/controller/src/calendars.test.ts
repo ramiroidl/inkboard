@@ -315,6 +315,30 @@ describe("Home Assistant calendar selection", () => {
     // A calendar that was never fetched reports its error.
     ha.down.add("calendar.holidays");
     await expect(service.getEvents(["calendar.holidays"])).rejects.toThrow("503");
+
+    // Date ranges, such as a whole month, are requested with their own window and cached.
+    ha.down.clear();
+    const monthStart = new Date("2026-10-31T00:00:00Z");
+    const monthEnd = new Date("2026-12-02T00:00:00Z");
+    const rangeRequests = () =>
+      ha.fetchImplementation.mock.calls
+        .map(([input]) => new URL(input instanceof Request ? input.url : String(input)))
+        .filter((url) => url.searchParams.get("start") === monthStart.toISOString());
+    const month = await service.getEventsBetween(monthStart, monthEnd);
+    expect(month.map((item) => item.title)).toEqual(["Grandparents visit", "School pickup"]);
+    expect(rangeRequests().map((url) => url.searchParams.get("end"))).toEqual([
+      monthEnd.toISOString(),
+    ]);
+    await service.getEventsBetween(monthStart, monthEnd);
+    expect(rangeRequests()).toHaveLength(1);
+
+    // An outage keeps the range's last events; a range never fetched fails.
+    ha.down.add("*");
+    clock.now = new Date(clock.now.getTime() + 301_000);
+    expect(await service.getEventsBetween(monthStart, monthEnd)).toEqual(month);
+    await expect(
+      service.getEventsBetween(monthStart, new Date("2026-12-03T00:00:00Z")),
+    ).rejects.toThrow("unavailable");
     database.close();
   });
 });

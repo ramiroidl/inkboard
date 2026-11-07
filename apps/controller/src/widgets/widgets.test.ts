@@ -19,7 +19,16 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((d) => rm(d, { recursive: true, force: true })));
 });
 
-const BUILT_IN = ["calendar", "datetime", "divider", "entity", "heading", "text", "todo"];
+const BUILT_IN = [
+  "calendar",
+  "calendar_month",
+  "datetime",
+  "divider",
+  "entity",
+  "heading",
+  "text",
+  "todo",
+];
 
 describe("widget discovery", () => {
   it("discovers every built-in widget folder", async () => {
