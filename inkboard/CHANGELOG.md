@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+- Export and import screens and display settings from the new **Backup** card.
+
 ## 0.6.0
 
 - Microsoft To Do: device-code sign-in, list selection, a To Do screen, and a To Do list

@@ -102,6 +102,7 @@ Widgets are plugins under `apps/controller/src/widgets/<type>/`. See
   `POST .../sign-out`, `GET|PUT .../lists`
 - `GET /api/v1/device/image.bmp` and `POST /api/v1/device/check-in` (device
   token required)
+- `GET|POST /api/v1/admin/backup` (export and import screens and settings)
 - `GET /api/v1/development/orientation.bmp` (development only)
 
 In the App, admin endpoints are served only through ingress; port 8100 serves

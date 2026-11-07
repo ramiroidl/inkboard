@@ -234,6 +234,15 @@ The display's buttons:
   stays for one rotation interval.
 - **KEY2** refreshes the current screen.
 
+### Back up or move your screens
+
+The **Backup** card's **Export** downloads your custom screens, rotation,
+schedules, quiet hours, and calendar and To Do list selections as a file.
+**Import** applies such a file, for example on a new Home Assistant. Screens
+that already exist are kept rather than duplicated. Sign-ins and tokens are not
+included, so sign in to Microsoft To Do before importing if the rotation uses
+the To Do screen.
+
 ## 6. Save battery
 
 While **Inkboard OG Maintenance Mode** is on (the default), the display stays

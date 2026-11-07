@@ -15,6 +15,8 @@ import { SettingsStore } from "./db/settings-store.js";
 import { SecretBox } from "./security/secret-box.js";
 import { TodoService } from "./todo/todo-service.js";
 import { microsoftTodoRoutes } from "./routes/microsoft-todo.js";
+import { BackupService } from "./backup/backup-service.js";
+import { backupRoutes } from "./routes/backup.js";
 import { createWidgetRegistry } from "./widgets/registry.js";
 import type { WidgetDefinition } from "./widgets/types.js";
 import { ScreenService } from "./screens/screen-service.js";
@@ -127,6 +129,9 @@ export async function buildApp(
     }),
   );
   await app.register(microsoftTodoRoutes(todoService));
+  await app.register(
+    backupRoutes(new BackupService(screenService, calendarService, todoService, now)),
+  );
   await app.register(deviceRoutes(screenService, database, config.deviceApiToken, now));
   if (config.enableDevelopmentRoutes) {
     await app.register(developmentRoutes(artifactService));

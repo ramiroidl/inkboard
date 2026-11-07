@@ -324,3 +324,27 @@ export interface CustomScreen extends CustomScreenInput {
   createdAt: string;
   updatedAt: string;
 }
+
+/** Screens and display settings exported from one controller to import into another. */
+export interface InkboardBackup {
+  format: "inkboard-backup";
+  version: 1;
+  exportedAt: string;
+  screens: { id: string; name: string; widgets: ScreenWidget[] }[];
+  rotation: RotationSettings;
+  schedules: { screenId: ScreenId; days: number[]; start: string; end: string }[];
+  quietHours: QuietHours;
+  testPatternHidden: boolean;
+  /** Selected Home Assistant calendar entity IDs. */
+  calendars: string[];
+  /** Selected Microsoft To Do list IDs. Sign-ins are not exported. */
+  todoLists: string[];
+}
+
+export interface InkboardBackupImportResult {
+  screensCreated: number;
+  /** Screens that already existed with the same name and widgets. */
+  screensReused: number;
+  /** Settings that could not be applied, such as screens unavailable here. */
+  warnings: string[];
+}

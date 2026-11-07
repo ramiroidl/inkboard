@@ -13,6 +13,7 @@ import type {
 
 import { CalendarSettings } from "./CalendarSettings.js";
 import { DeviceSetup } from "./DeviceSetup.js";
+import { BackupSettings } from "./BackupSettings.js";
 import { MicrosoftTodoSettings } from "./MicrosoftTodoSettings.js";
 import { RotationEditor } from "./RotationEditor.js";
 import { QuietHoursEditor, ScheduleEditor } from "./ScheduleEditor.js";
@@ -26,6 +27,7 @@ export function App() {
   const [screens, setScreens] = useState<AdminScreensResponse["screens"]>([]);
   const [rotation, setRotation] = useState<RotationSettings | null>(null);
   const [testPatternHidden, setTestPatternHidden] = useState(false);
+  const [importCount, setImportCount] = useState(0);
   const [schedule, setSchedule] = useState<Pick<
     AdminScreensResponse,
     "schedules" | "quietHours" | "scheduleState" | "timeZone"
@@ -404,6 +406,7 @@ export function App() {
         </div>
         {status !== null ? (
           <CalendarSettings
+            key={importCount}
             status={status.calendar}
             onSaved={(calendar) => {
               setStatus({ ...status, calendar });
@@ -414,7 +417,26 @@ export function App() {
       </section>
 
       <section className="status-card device-card" aria-live="polite">
-        <MicrosoftTodoSettings onChanged={reloadScreensQuietly} />
+        <MicrosoftTodoSettings key={importCount} onChanged={reloadScreensQuietly} />
+      </section>
+
+      <section className="status-card device-card">
+        <div>
+          <strong>Backup</strong>
+        </div>
+        <BackupSettings
+          onImported={() => {
+            reloadScreensQuietly();
+            void fetch("api/v1/admin/status")
+              .then(async (response) => {
+                if (response.ok) {
+                  setStatus((await response.json()) as AdminStatusResponse);
+                }
+              })
+              .catch(() => undefined)
+              .finally(() => setImportCount((count) => count + 1));
+          }}
+        />
       </section>
     </main>
   );

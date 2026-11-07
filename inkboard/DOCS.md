@@ -82,4 +82,7 @@ consistent state.
 The App starts with empty settings. To keep your display working without
 reflashing, set the **Device token** option to the token your firmware already
 uses, then change only `inkboard_controller_url` in the firmware to the App's
-device port. Recreate your screens and calendar selection on the Inkboard page.
+device port. Then sign in to Microsoft To Do on the Inkboard page if you use
+it, select **Export** in the **Backup** card of the old controller, and
+**Import** the file on the new one. That brings over your custom screens,
+rotation, schedules, quiet hours, and calendar and To Do list selections.

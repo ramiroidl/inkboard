@@ -106,5 +106,6 @@ match `INKBOARD_DEVICE_API_TOKEN`.
 The App starts with empty settings. To keep the display working without
 reflashing, set the App's **Device token** option to the token the firmware
 already uses, then change only `inkboard_controller_url` to the App's device
-port (8100) and install the firmware over Wi-Fi. Recreate your screens and
-calendar selection on the Inkboard page.
+port (8100) and install the firmware over Wi-Fi. Use **Export** in the old
+controller's **Backup** card and **Import** on the new Inkboard page to bring
+over your screens, rotation, schedules, quiet hours, and selections.

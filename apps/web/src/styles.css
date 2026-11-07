@@ -209,22 +209,27 @@ dd {
   font-size: 0.9rem;
 }
 
-button {
+button,
+.button {
+  display: inline-block;
   padding: 7px 14px;
   border: 2px solid #191a17;
   background: #fffdf7;
   color: #191a17;
   font: inherit;
   font-weight: 700;
+  text-decoration: none;
   cursor: pointer;
 }
 
-button:disabled {
+button:disabled,
+.button.disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-button.primary {
+button.primary,
+.button.primary {
   background: #191a17;
   color: #fffdf7;
 }
@@ -481,6 +486,7 @@ select {
   border: 2px solid #191a17;
   font-size: 0.85rem;
   font-weight: 700;
+  text-decoration: none;
   cursor: pointer;
 }
 
