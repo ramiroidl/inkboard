@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3
+
+- **Customize** the built-in Calendar and To Do screens: they become regular screens built
+  from widgets, so every part can be configured. Deleting the copy restores the built-in.
+- The rotation controls line up.
+
 ## 0.7.2
 
 - **Invert colors** option for each display, for panels that show a black background.

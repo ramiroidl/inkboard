@@ -95,6 +95,7 @@ Widgets are plugins under `apps/controller/src/widgets/<type>/`. See
 - `GET /api/v1/admin/widgets`
 - `GET /api/v1/admin/entities?domain=sensor`
 - `GET|POST /api/v1/admin/screens`, `GET|PUT|DELETE /api/v1/admin/screens/:screenId`
+- `POST /api/v1/admin/screens/:screenId/customize` (Calendar and To Do built-ins)
 - `GET /api/v1/admin/screens/:screenId/preview.bmp`, `POST /api/v1/admin/screens/preview.bmp`
 - `PUT /api/v1/admin/rotation`, `PUT /api/v1/admin/schedules`, `PUT /api/v1/admin/quiet-hours`
 - `PUT /api/v1/admin/test-pattern`

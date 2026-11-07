@@ -113,7 +113,7 @@ export function RotationEditor({
           </select>
         </label>
         <label className="field">
-          <span>Change every (minutes)</span>
+          <span>Every (5–1,440 min)</span>
           <input
             type="number"
             min={5}
@@ -122,7 +122,6 @@ export function RotationEditor({
             value={Number.isFinite(intervalMinutes) ? intervalMinutes : ""}
             onChange={(event) => setIntervalMinutes(event.target.valueAsNumber)}
           />
-          <small className="hint">5 to 1,440 minutes</small>
         </label>
         <button type="button" className="primary" onClick={() => void save()}>
           Save rotation

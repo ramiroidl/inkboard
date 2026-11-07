@@ -232,6 +232,13 @@ forecast comes from [Open-Meteo](https://open-meteo.com/) (CC BY 4.0) for Home
 Assistant's home location, rounded to about 1 km, and refreshes hourly; it is
 off by default because it sends that location to Open-Meteo.
 
+The built-in **Calendar** and **To Do** screens have a fixed layout. Select
+**Customize** on either one to replace it with a regular screen built from
+widgets (a date and a Calendar agenda, or a heading and a To Do list), then
+change each widget's settings or add others. The rotation, schedules, and
+displays that used the built-in screen switch to the new one. Deleting the
+customized screen brings the built-in screen back.
+
 Untick **Show the test pattern screen** below the screen list to hide the test
 pattern once you have other screens.
 

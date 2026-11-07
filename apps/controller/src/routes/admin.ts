@@ -308,6 +308,7 @@ export function adminRoutes(
                   name: Type.String(),
                   description: Type.String(),
                   kind: Type.Union([Type.Literal("builtin"), Type.Literal("custom")]),
+                  customizable: Type.Optional(Type.Boolean()),
                 }),
               ),
               rotation: RotationSettingsSchema,
@@ -405,6 +406,26 @@ export function adminRoutes(
       },
       async (request, reply) =>
         reply.code(201).send(screenService.createCustomScreen(request.body)),
+    );
+
+    app.post(
+      "/api/v1/admin/screens/:screenId/customize",
+      {
+        schema: {
+          params: Type.Object({ screenId: ScreenIdSchema }),
+          response: { 200: CustomScreenSchema, 400: ErrorSchema },
+        },
+      },
+      async (request, reply) => {
+        try {
+          return screenService.customizeBuiltin(request.params.screenId);
+        } catch (error: unknown) {
+          if (error instanceof ScreenNotFoundError) {
+            return reply.code(400).send({ error: error.message });
+          }
+          throw error;
+        }
+      },
     );
 
     app.get(

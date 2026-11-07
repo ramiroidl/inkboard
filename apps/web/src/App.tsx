@@ -103,6 +103,20 @@ export function App() {
     return () => controller.abort();
   }, [reloadScreens]);
 
+  const customizeScreen = async (screenId: ScreenId) => {
+    const response = await fetch(`api/v1/admin/screens/${encodeURIComponent(screenId)}/customize`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      setError(`Unable to customize the screen (${response.status})`);
+      return;
+    }
+    setError(null);
+    const copy = (await response.json()) as CustomScreen;
+    await reloadScreens();
+    setEditor({ mode: "edit", screen: copy });
+  };
+
   const editScreen = async (screenId: ScreenId) => {
     const response = await fetch(`api/v1/admin/screens/${encodeURIComponent(screenId)}`);
     if (!response.ok) {
@@ -338,7 +352,18 @@ export function App() {
                     </button>
                   </span>
                 ) : (
-                  <span className="badge">Built-in</span>
+                  <span className="screen-actions">
+                    <span className="badge">Built-in</span>
+                    {screen.customizable === true ? (
+                      <button
+                        type="button"
+                        title="Replace this screen with an editable copy made of widgets"
+                        onClick={() => void customizeScreen(screen.id)}
+                      >
+                        Customize
+                      </button>
+                    ) : null}
+                  </span>
                 )}
               </figcaption>
             </figure>

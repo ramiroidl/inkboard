@@ -219,6 +219,8 @@ export interface ScreenSummary {
   name: string;
   description: string;
   kind: ScreenKind;
+  /** Built-in screens that can be replaced by an editable copy made of widgets. */
+  customizable?: boolean;
 }
 
 export interface RotationSettings {

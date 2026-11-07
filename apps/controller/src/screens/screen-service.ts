@@ -66,6 +66,34 @@ const ROTATION_KEY = "rotation";
 const SCHEDULES_KEY = "schedules";
 const QUIET_HOURS_KEY = "quietHours";
 const TEST_PATTERN_HIDDEN_KEY = "testPatternHidden";
+const CUSTOMIZED_BUILTINS_KEY = "customizedBuiltins";
+
+type CustomizableScreenId = "calendar" | "todo";
+
+function isCustomizable(screenId: string): screenId is CustomizableScreenId {
+  return screenId === "calendar" || screenId === "todo";
+}
+
+/** Widgets that recreate each customizable built-in screen; defaults fill other settings. */
+const BUILTIN_TEMPLATES: Record<
+  CustomizableScreenId,
+  { name: string; widgets: (Record<string, unknown> & { type: string })[] }
+> = {
+  calendar: {
+    name: "Calendar",
+    widgets: [
+      { type: "datetime", format: "date" },
+      { type: "calendar", maxEvents: 8 },
+    ],
+  },
+  todo: {
+    name: "To Do",
+    widgets: [
+      { type: "heading", text: "To Do", size: "medium" },
+      { type: "todo", maxItems: 10 },
+    ],
+  },
+};
 const DEFAULT_ROTATION: RotationSettings = { screenIds: [], intervalMinutes: 15 };
 const DEFAULT_QUIET_HOURS: QuietHours = { enabled: false, start: "22:00", end: "07:00" };
 /** Device refresh cadence outside quiet hours, matching the firmware's sleep default. */
@@ -144,6 +172,7 @@ export class ScreenService {
   ) {}
 
   public listScreens(): ScreenSummary[] {
+    const customized = this.customizedBuiltins();
     const custom = this.listCustomScreens().map((screen): ScreenSummary => ({
       id: screen.id,
       name: screen.name,
@@ -151,12 +180,85 @@ export class ScreenService {
       kind: "custom",
     }));
     const content = [
-      ...(this.calendarService.getStatus().configured ? [BUILTIN_SCREENS.calendar] : []),
-      ...(this.todoService?.isAvailable() === true ? [BUILTIN_SCREENS.todo] : []),
+      ...(this.calendarService.getStatus().configured && customized.calendar === undefined
+        ? [{ ...BUILTIN_SCREENS.calendar, customizable: true }]
+        : []),
+      ...(this.todoService?.isAvailable() === true && customized.todo === undefined
+        ? [{ ...BUILTIN_SCREENS.todo, customizable: true }]
+        : []),
     ];
     // The test pattern stays as a fallback so a display always has a screen.
     const showTestPattern = !this.isTestPatternHidden() || content.length + custom.length === 0;
     return [...content, ...(showTestPattern ? [BUILTIN_SCREENS.orientation] : []), ...custom];
+  }
+
+  /** Built-in screens replaced by an editable copy, limited to copies that still exist. */
+  private customizedBuiltins(): Partial<Record<CustomizableScreenId, string>> {
+    const stored = this.readSetting<Partial<Record<CustomizableScreenId, string>>>(
+      CUSTOMIZED_BUILTINS_KEY,
+      {},
+    );
+    const existing = new Set(this.listCustomScreens().map((screen) => screen.id));
+    return Object.fromEntries(
+      Object.entries(stored).filter(
+        ([, screenId]) => screenId !== undefined && existing.has(screenId),
+      ),
+    );
+  }
+
+  /**
+   * Replaces a built-in screen with an editable screen made of widgets, so each part can be
+   * configured. Rotation, schedules, and displays showing the built-in switch to the copy.
+   * Deleting the copy brings the built-in back.
+   */
+  public customizeBuiltin(screenId: string): CustomScreen {
+    if (!isCustomizable(screenId)) {
+      throw new ScreenNotFoundError(`Screen ${screenId} cannot be customized`);
+    }
+    const existing = this.customizedBuiltins()[screenId];
+    if (existing !== undefined) {
+      return this.getCustomScreen(existing);
+    }
+    if (!this.isAvailable(screenId)) {
+      throw new ScreenNotFoundError(`Screen ${screenId} is not available`);
+    }
+    const template = BUILTIN_TEMPLATES[screenId];
+    const widgets = template.widgets.map((widget): ScreenWidget => {
+      const definition = this.widgetRegistry.get(widget.type);
+      return {
+        ...(definition === undefined ? {} : structuredClone(definition.defaultConfig)),
+        ...widget,
+      };
+    });
+    const copy = this.createCustomScreen({ name: template.name, widgets });
+    this.database.raw.transaction(() => {
+      this.replaceScreenReferences(screenId, copy.id);
+      this.writeSetting(CUSTOMIZED_BUILTINS_KEY, {
+        ...this.readSetting<Record<string, string>>(CUSTOMIZED_BUILTINS_KEY, {}),
+        [screenId]: copy.id,
+      });
+    })();
+    return copy;
+  }
+
+  /** Points rotation, schedules, and displays at another screen. */
+  private replaceScreenReferences(from: string, to: string): void {
+    const rotation = this.readRotation();
+    this.writeRotation({
+      ...rotation,
+      screenIds: [...new Set(rotation.screenIds.map((id) => (id === from ? to : id)))],
+    });
+    this.writeSetting(
+      SCHEDULES_KEY,
+      this.readSchedules().map((rule) =>
+        rule.screenId === from ? { ...rule, screenId: to } : rule,
+      ),
+    );
+    this.database.orm
+      .update(devices)
+      .set({ currentScreenId: to })
+      .where(eq(devices.currentScreenId, from))
+      .run();
   }
 
   public isTestPatternHidden(): boolean {
@@ -262,6 +364,10 @@ export class ScreenService {
   }
 
   public deleteCustomScreen(screenId: string): void {
+    // Deleting a customized built-in hands its places back to the built-in screen.
+    const builtin = Object.entries(
+      this.readSetting<Record<string, string>>(CUSTOMIZED_BUILTINS_KEY, {}),
+    ).find(([, copyId]) => copyId === screenId)?.[0];
     this.database.raw.transaction(() => {
       const result = this.database.orm
         .delete(customScreens)
@@ -269,6 +375,13 @@ export class ScreenService {
         .run();
       if (result.changes === 0) {
         throw new ScreenNotFoundError(`Screen ${screenId} was not found`);
+      }
+      if (builtin !== undefined) {
+        const remaining = this.readSetting<Record<string, string>>(CUSTOMIZED_BUILTINS_KEY, {});
+        delete remaining[builtin];
+        this.writeSetting(CUSTOMIZED_BUILTINS_KEY, remaining);
+        this.replaceScreenReferences(screenId, builtin);
+        return;
       }
       const rotation = this.readRotation();
       this.writeRotation({

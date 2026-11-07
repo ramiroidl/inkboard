@@ -595,3 +595,10 @@ select {
 .test-pattern-toggle {
   margin-top: 20px;
 }
+
+.rotation-controls select,
+.rotation-controls input,
+.rotation-controls button {
+  box-sizing: border-box;
+  height: 42px;
+}
