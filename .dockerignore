@@ -1,0 +1,9 @@
+.git
+.github
+coverage
+data
+dist
+node_modules
+*.log
+**/.esphome
+firmware/esphome/secrets.yaml

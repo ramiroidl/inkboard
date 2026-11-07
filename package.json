@@ -1,0 +1,38 @@
+{
+  "name": "inkboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first e-paper dashboard controller",
+  "engines": {
+    "node": ">=24.22.1 <25"
+  },
+  "packageManager": "npm@11.19.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @inkboard/contracts && npm run build --workspace @inkboard/epaper-image && npm run build --workspace @inkboard/web && npm run build --workspace @inkboard/controller",
+    "dev": "npm run dev --workspace @inkboard/controller",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "start": "npm run start --workspace @inkboard/controller",
+    "test": "vitest run",
+    "typecheck": "npm run build --workspace @inkboard/contracts && npm run build --workspace @inkboard/epaper-image && npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.5",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.0",
+    "vitest": "^5.0.5"
+  },
+  "license": "MIT"
+}

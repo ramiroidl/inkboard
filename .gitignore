@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.env
+*.log
+*.tsbuildinfo
+data/
+.inkboard/
+.esphome/
+firmware/esphome/secrets.yaml

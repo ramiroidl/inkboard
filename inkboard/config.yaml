@@ -1,0 +1,43 @@
+name: Inkboard
+version: "0.6.0"
+slug: inkboard
+description: Local e-paper dashboards for the Seeed TRMNL 7.5-inch display
+url: https://github.com/ramiroidl/inkboard
+arch:
+  - amd64
+  - aarch64
+image: ghcr.io/ramiroidl/inkboard-{arch}
+init: false
+startup: application
+boot: auto
+# The admin UI is served only through Home Assistant's authenticated ingress.
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:tablet-dashboard
+panel_title: Inkboard
+# Lets the App call Home Assistant through the Supervisor without a long-lived token.
+homeassistant_api: true
+# The display fetches images on this LAN port, which serves only device endpoints.
+ports:
+  8100/tcp: 8100
+ports_description:
+  8100/tcp: Display device API (LAN)
+# The SQLite database is consistent only while the App is stopped.
+backup: cold
+watchdog: http://[HOST]:[PORT:8099]/health/ready
+options:
+  device_api_token: ""
+  time_zone: ""
+  calendar_look_ahead_days: 7
+  calendar_refresh_seconds: 300
+  microsoft_client_id: ""
+  microsoft_tenant: common
+  log_level: info
+schema:
+  device_api_token: password?
+  time_zone: str?
+  calendar_look_ahead_days: int(1,31)
+  calendar_refresh_seconds: int(60,3600)
+  microsoft_client_id: str?
+  microsoft_tenant: str?
+  log_level: list(trace|debug|info|warn|error|fatal)

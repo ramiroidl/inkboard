@@ -1,0 +1,32 @@
+configuration:
+  device_api_token:
+    name: Device token
+    description: >-
+      Token the display firmware sends with each request (at least 32 characters). Leave
+      empty to have Inkboard generate one; the Inkboard page shows it.
+  time_zone:
+    name: Time zone
+    description: >-
+      IANA time zone for dates, events, schedules, and quiet hours, such as
+      America/Mexico_City. Leave empty to use Home Assistant's time zone.
+  calendar_look_ahead_days:
+    name: Calendar look-ahead (days)
+    description: How many days of upcoming calendar events to fetch.
+  calendar_refresh_seconds:
+    name: Data refresh interval (seconds)
+    description: How often calendars and entity values are fetched from Home Assistant.
+  microsoft_client_id:
+    name: Microsoft app (client) ID
+    description: >-
+      Optional Application (client) ID of your Microsoft Entra app registration for
+      Microsoft To Do. It can also be set on the Inkboard page.
+  microsoft_tenant:
+    name: Microsoft tenant
+    description: >-
+      common for personal and work accounts, consumers for personal accounts only, or your
+      tenant ID.
+  log_level:
+    name: Log level
+    description: How much detail to write to the App log.
+network:
+  8100/tcp: Port the display uses to fetch images and check in.
