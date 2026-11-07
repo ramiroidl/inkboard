@@ -116,6 +116,26 @@ describe("month calendar widget", () => {
     expect(result.svg).toContain(">Sun<");
   });
 
+  it("shows the month name vertically, before the weekdays, or not at all", async () => {
+    const base = { weekStart: "monday", maxEvents: 4, crossOutPastDays: false, weather: false };
+    const vertical = await renderWidgetForTest(monthWidget, { ...base, monthLabel: "vertical" });
+    expect(vertical.hasError).toBe(false);
+    expect(vertical.svg).toMatch(/transform="rotate\(-90 [\d.]+ [\d.]+\)"[^>]*>JANUARY</);
+    expect(vertical.svg).not.toContain(">Jan<");
+
+    const none = await renderWidgetForTest(monthWidget, { ...base, monthLabel: "none" });
+    expect(none.svg).not.toContain("JANUARY");
+    expect(none.svg).not.toContain(">Jan<");
+
+    const header = await renderWidgetForTest(monthWidget, base);
+    expect(header.svg).toContain(">Jan<");
+
+    const large = await renderWidgetForTest(monthWidget, { ...base, textSize: "extraLarge" });
+    expect(large.hasError).toBe(false);
+    expect(large.svg).toContain('font-size="20"');
+    expect(header.svg).not.toContain('font-size="20"');
+  });
+
   it("fills the whole screen when it is the only widget", async () => {
     const registry = await createWidgetRegistry();
     const services = createTestServices();
@@ -140,5 +160,23 @@ describe("month calendar widget", () => {
     );
     expect(withHeading).toContain(">MONTH<");
     expect(withHeading).not.toContain("DID NOT FIT");
+  });
+});
+
+describe("heading widget", () => {
+  it("offers three sizes and keeps old headings large", async () => {
+    const registry = await createWidgetRegistry();
+    const heading = registry.get("heading")!;
+    const heights = (["small", "medium", "large"] as const).map((size) =>
+      heading.height({ text: "Family", size }, undefined, 736, {
+        timeZone: "UTC",
+        now: new Date(),
+      }),
+    );
+    expect(heights).toEqual([32, 42, 52]);
+    const old = await renderWidgetForTest(heading, { text: "Family" });
+    expect(old.svg).toContain('font-size="40"');
+    const small = await renderWidgetForTest(heading, { text: "Family", size: "small" });
+    expect(small.svg).toContain('font-size="24"');
   });
 });

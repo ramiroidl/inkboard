@@ -13,12 +13,17 @@ import {
 } from "../sdk.js";
 
 const FONT = "DejaVu Sans, sans-serif";
-const HEADER_HEIGHT = 26;
-const GUTTER = 38;
 const GAP = 4;
-const DAY_BAR = 20;
-const LINE_HEIGHT = 14;
-const EVENT_FONT = 12;
+
+/** Font sizes and spacing for each text size choice. */
+const TEXT_SIZES = {
+  normal: { event: 12, line: 14, day: 16, bar: 20, header: 14, weather: 10 },
+  large: { event: 14, line: 16, day: 18, bar: 22, header: 16, weather: 11 },
+  extraLarge: { event: 16, line: 19, day: 20, bar: 24, header: 17, weather: 12 },
+} as const;
+
+/** Width of the left column for each month label choice. */
+const GUTTERS = { header: 38, vertical: 44, none: 0 } as const;
 
 export interface DayWeather {
   icon: "sunny" | "cloudy" | "foggy" | "rainy" | "snowy" | "stormy" | "unknown";
@@ -201,6 +206,29 @@ export default defineWidget({
       [Type.Literal("monday", { title: "Monday" }), Type.Literal("sunday", { title: "Sunday" })],
       { title: "Week starts on" },
     ),
+    monthLabel: Type.Optional(
+      Type.Union(
+        [
+          Type.Literal("header", { title: "Short name before the weekdays" }),
+          Type.Literal("vertical", { title: "Full name down the left side" }),
+          Type.Literal("none", { title: "None" }),
+        ],
+        { title: "Month name" },
+      ),
+    ),
+    textSize: Type.Optional(
+      Type.Union(
+        [
+          Type.Literal("normal", { title: "Normal" }),
+          Type.Literal("large", { title: "Large" }),
+          Type.Literal("extraLarge", { title: "Extra large" }),
+        ],
+        {
+          title: "Text size",
+          description: "Larger text shows fewer events per day.",
+        },
+      ),
+    ),
     maxEvents: Type.Integer({
       minimum: 1,
       maximum: 8,
@@ -217,6 +245,8 @@ export default defineWidget({
   defaultConfig: {
     calendars: [],
     weekStart: "monday",
+    monthLabel: "header",
+    textSize: "normal",
     maxEvents: 4,
     crossOutPastDays: true,
     weather: false,
@@ -245,28 +275,60 @@ export default defineWidget({
   height: (_config, _data, _width, { availableHeight }) => Math.max(200, availableHeight ?? 400),
   render: (config, data, box) => {
     const parts: string[] = [];
+    const size = TEXT_SIZES[config.textSize ?? "normal"];
+    const monthLabel = config.monthLabel ?? "header";
+    const gutter = GUTTERS[monthLabel];
     const pad = box.width >= 800 ? 6 : 0;
-    const columnWidth = (box.width - pad * 2 - GUTTER - GAP * 6) / 7;
+    const columnWidth = (box.width - pad * 2 - gutter - GAP * 6) / 7;
     const blanks = leadingBlanks(data.month, config.weekStart);
     const count = daysInMonth(data.month);
     const rows = Math.ceil((blanks + count) / 7);
-    const gridTop = pad + HEADER_HEIGHT;
-    const rowHeight = (box.height - gridTop - pad - GAP * (rows - 1)) / rows;
-    const left = pad + GUTTER;
+    const headerHeight = size.header + 12;
+    const gridTop = pad + headerHeight;
+    const gridHeight = box.height - gridTop - pad;
+    const rowHeight = (gridHeight - GAP * (rows - 1)) / rows;
+    const left = pad + gutter;
+    const headerBaseline = pad + size.header + 4;
 
-    const monthName = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(
-      keyToDate(`${data.month}-01`),
-    );
-    parts.push(text(pad + 2, pad + 18, monthName, 15, { bold: true }));
+    const monthDate = keyToDate(`${data.month}-01`);
+    if (monthLabel === "header") {
+      const monthName = new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        timeZone: "UTC",
+      }).format(monthDate);
+      parts.push(text(pad + 2, headerBaseline, monthName, size.header + 1, { bold: true }));
+    } else if (monthLabel === "vertical") {
+      // The full month name reads bottom to top along the left column.
+      const monthName = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" })
+        .format(monthDate)
+        .toUpperCase();
+      const fontSize = Math.min(
+        34,
+        Math.floor(
+          (gridHeight - 8) / (estimateTextWidth(monthName, 1, true) + monthName.length * 0.15),
+        ),
+      );
+      const centerX = pad + gutter / 2;
+      const centerY = gridTop + gridHeight / 2;
+      parts.push(
+        `<text x="${centerX}" y="${centerY + fontSize * 0.35}" transform="rotate(-90 ${centerX} ${centerY})" font-family="${FONT}" font-size="${fontSize}" font-weight="700" letter-spacing="${(fontSize * 0.15).toFixed(1)}" text-anchor="middle">${escapeXml(monthName)}</text>`,
+      );
+    }
     const names =
       config.weekStart === "monday"
         ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     names.forEach((name, index) => {
       parts.push(
-        text(left + index * (columnWidth + GAP) + columnWidth / 2, pad + 18, name, 14, {
-          anchor: "middle",
-        }),
+        text(
+          left + index * (columnWidth + GAP) + columnWidth / 2,
+          headerBaseline,
+          name,
+          size.header,
+          {
+            anchor: "middle",
+          },
+        ),
       );
     });
 
@@ -287,36 +349,57 @@ export default defineWidget({
       );
       if (isToday) {
         parts.push(
-          `<rect x="${x}" y="${y}" width="${columnWidth}" height="${DAY_BAR}" fill="black"/>`,
+          `<rect x="${x}" y="${y}" width="${columnWidth}" height="${size.bar}" fill="black"/>`,
         );
       }
       const ink = isToday ? "white" : "black";
-      parts.push(text(x + 4, y + 16, String(dayNumber), 16, { bold: isToday, color: ink }));
+      parts.push(
+        text(x + 4, y + size.bar - 4, String(dayNumber), size.day, { bold: isToday, color: ink }),
+      );
       if (weather !== undefined) {
+        // Narrow cells drop the icon, then the temperatures, rather than overlap the day.
         const label = `${weather.max}°/${weather.min}°`;
-        parts.push(text(x + columnWidth - 3, y + 14, label, 10, { anchor: "end", color: ink }));
-        const labelWidth = estimateTextWidth(label, 10);
-        parts.push(iconSvg(weather.icon, x + columnWidth - 3 - labelWidth - 17, y + 2, ink));
+        const labelWidth = estimateTextWidth(label, size.weather);
+        const dayWidth = estimateTextWidth(String(dayNumber), size.day, isToday) + 10;
+        const room = columnWidth - dayWidth - 3;
+        if (labelWidth <= room) {
+          parts.push(
+            text(x + columnWidth - 3, y + size.bar - 6, label, size.weather, {
+              anchor: "end",
+              color: ink,
+            }),
+          );
+        }
+        if (labelWidth + 17 <= room) {
+          parts.push(
+            iconSvg(
+              weather.icon,
+              x + columnWidth - 3 - labelWidth - 17,
+              y + (size.bar - 16) / 2,
+              ink,
+            ),
+          );
+        }
       }
 
       const titles = data.days?.[key] ?? [];
       const capacity = Math.max(
         0,
-        Math.min(config.maxEvents, Math.floor((rowHeight - DAY_BAR - 4) / LINE_HEIGHT)),
+        Math.min(config.maxEvents, Math.floor((rowHeight - size.bar - 4) / size.line)),
       );
-      const firstLine = y + DAY_BAR + 12;
+      const firstLine = y + size.bar + size.event;
       if (capacity === 1 && titles.length > 1) {
         // One line only: the first event, then the count of the others.
         const more = ` +${titles.length - 1}`;
-        const moreWidth = estimateTextWidth(more, EVENT_FONT, true);
+        const moreWidth = estimateTextWidth(more, size.event, true);
         parts.push(
           svgText(
             x + 4,
             firstLine,
-            fitToWidth(titles[0]!, columnWidth - 8 - moreWidth, EVENT_FONT),
-            EVENT_FONT,
+            fitToWidth(titles[0]!, columnWidth - 8 - moreWidth, size.event),
+            size.event,
           ),
-          svgText(x + columnWidth - 4, firstLine, more.trim(), EVENT_FONT, {
+          svgText(x + columnWidth - 4, firstLine, more.trim(), size.event, {
             bold: true,
             anchor: "end",
           }),
@@ -327,23 +410,17 @@ export default defineWidget({
           parts.push(
             svgText(
               x + 4,
-              firstLine + index * LINE_HEIGHT,
-              fitToWidth(title, columnWidth - 8, EVENT_FONT),
-              EVENT_FONT,
+              firstLine + index * size.line,
+              fitToWidth(title, columnWidth - 8, size.event),
+              size.event,
             ),
           );
         });
         if (titles.length > shown && capacity > 0) {
           parts.push(
-            svgText(
-              x + 4,
-              firstLine + shown * LINE_HEIGHT,
-              `+${titles.length - shown}`,
-              EVENT_FONT,
-              {
-                bold: true,
-              },
-            ),
+            svgText(x + 4, firstLine + shown * size.line, `+${titles.length - shown}`, size.event, {
+              bold: true,
+            }),
           );
         }
       }

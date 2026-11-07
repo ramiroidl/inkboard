@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+- Month calendar: show the full month name down the left side, or hide it, and choose
+  normal, large, or extra large text.
+- Heading: choose large, medium, or small.
+
 ## 0.7.0
 
 - **Month calendar** widget: the whole month with event names, today marked, past days

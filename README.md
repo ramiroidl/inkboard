@@ -205,7 +205,7 @@ controller, so it matches the display pixel for pixel.
 
 | Widget               | Shows                                                                              |
 | -------------------- | ---------------------------------------------------------------------------------- |
-| Heading              | Large bold title                                                                   |
+| Heading              | Bold title, large, medium, or small                                                |
 | Text                 | Wrapped message, up to six lines                                                   |
 | Date & time          | Date (default), clock, or both; a clock can lag between refreshes                  |
 | Home Assistant value | Any entity's state and unit, such as `sensor.outdoor_temp`; three can share a row  |
@@ -222,6 +222,11 @@ For a wall calendar, make a screen with only the **Month calendar** widget: on
 its own it fills the whole display, without margins or the screen name. Each
 day shows as many event names as fit, then `+n`. Today has a black bar, past
 days are crossed out (optional), and the week can start on Monday or Sunday.
+The month name can sit before the weekday names (`Nov`), run down the left
+side in full (`NOVEMBER`), or be hidden to give the days more room, and the
+text comes in normal, large, and extra large. Larger text fits fewer events per
+day. Under a **Heading**, choose a smaller heading size to leave more room for
+the calendar.
 Tick **Show weather** for a seven-day forecast in the corner of each day. The
 forecast comes from [Open-Meteo](https://open-meteo.com/) (CC BY 4.0) for Home
 Assistant's home location, rounded to about 1 km, and refreshes hourly; it is
