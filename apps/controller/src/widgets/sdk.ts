@@ -31,7 +31,7 @@ export {
 } from "../artifacts/calendar-renderer.js";
 export { describeTask, formatDueDate } from "../artifacts/todo-renderer.js";
 
-/** The font installed in the controller image. Other fonts render as missing glyphs. */
+/** Default Latin font. Japanese widgets can use the image's Noto Sans CJK JP font. */
 export const FONT_FAMILY = "DejaVu Sans, sans-serif";
 
 /**

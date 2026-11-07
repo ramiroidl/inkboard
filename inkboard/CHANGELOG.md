@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
 
+- **Japanese Study** widget: curated N5/travel vocabulary, kana readings,
+  translations, optional romaji, beginner grammar, and stable daily/hourly lessons.
+- Schema-driven CSV upload with validation, preview, and per-instance backup
+  persistence. Japanese rendering uses Noto Sans CJK JP in both image targets.
 - All content screens use the same editable, self-contained widget system.
   Calendar and To Do selections and display options belong to each instance;
   empty selections no longer inherit page-wide defaults.

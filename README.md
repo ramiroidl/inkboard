@@ -7,6 +7,7 @@ The display runs a small ESPHome firmware that downloads the current screen and 
 
 - Calendar agendas and a whole-month calendar from your Home Assistant calendars
 - Microsoft To Do lists, read-only, with personal or work accounts
+- Japanese vocabulary and beginner grammar, including your own CSV word lists
 - Editable screens built from self-contained widgets: headings, text, dates,
   Home Assistant values, agendas, and task lists
 - Screen rotation, time-of-day schedules, and quiet hours
@@ -285,16 +286,17 @@ deletes the tokens and saved tasks.
 Select **New screen** and add up to 12 widgets. The preview is rendered by the
 controller, so it matches the display pixel for pixel.
 
-| Widget               | Shows                                                                              |
-| -------------------- | ---------------------------------------------------------------------------------- |
-| Heading              | Bold title, large, medium, or small                                                |
-| Text                 | Wrapped message, up to six lines                                                   |
-| Date & time          | Date (default), clock, or both; a clock can lag between refreshes                  |
-| Home Assistant value | Any entity's state and unit, such as `sensor.outdoor_temp`; three can share a row  |
-| Calendar agenda      | Next events from calendars chosen for this widget                                  |
-| Month calendar       | The whole month with event names, today marked, past days crossed out, and weather |
-| To Do list           | Open tasks from chosen To Do lists, with optional due dates and list names         |
-| Divider              | Heavy horizontal rule                                                              |
+| Widget               | Shows                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| Heading              | Bold title, large, medium, or small                                                 |
+| Text                 | Wrapped message, up to six lines                                                    |
+| Date & time          | Date (default), clock, or both; a clock can lag between refreshes                   |
+| Home Assistant value | Any entity's state and unit, such as `sensor.outdoor_temp`; three can share a row   |
+| Calendar agenda      | Next events from calendars chosen for this widget                                   |
+| Month calendar       | The whole month with event names, today marked, past days crossed out, and weather  |
+| To Do list           | Open tasks from chosen To Do lists, with optional due dates and list names          |
+| Japanese Study       | Vocabulary with kana readings and translations, plus short beginner grammar lessons |
+| Divider              | Heavy horizontal rule                                                               |
 
 For example, a grocery screen is a **Heading** that says "Groceries" and a
 **To Do list** widget with only **Groceries** ticked and due dates hidden. Lists
@@ -313,6 +315,48 @@ Tick **Show weather** for a seven-day forecast in the corner of each day. The
 forecast comes from [Open-Meteo](https://open-meteo.com/) (CC BY 4.0) for Home
 Assistant's home location, rounded to about 1 km, and refreshes hourly; it is
 off by default because it sends that location to Open-Meteo.
+
+#### Learn Japanese
+
+Add **Japanese Study** as the only widget on a screen for a full 800×480 lesson.
+Choose **Vocabulary and grammar**, **Vocabulary only**, or **Grammar only**.
+The bundled collections contain 36 curated N5 starter words and 24 travel
+essentials; they are not official or exhaustive JLPT lists. Advanced N4–N1
+bundled courses are not included yet, but you can import your own vocabulary.
+
+Words show their Japanese spelling, kana reading, and translation. Select one
+to three words per screen; **Show romaji when provided** is off by default.
+Grammar starts with polite **ます**, including its non-past use for habits and
+future actions. **Starting out** shows introductory lessons; **N5 / beginner
+review** also includes verb stems, irregular verbs, and additional particles.
+Choose a focused topic or follow the beginner course.
+
+Vocabulary changes daily or hourly, and grammar daily or weekly, from the
+**Course start date** in the controller's time zone. A new widget starts on
+today's date. Refreshing or opening its preview does not skip ahead. Lessons
+cycle after the collection ends; this is passive study, not recall tracking or
+spaced repetition. The device's existing buttons still navigate screens.
+
+To use your own list, upload **CSV UTF-8** with these column names:
+
+```csv
+word,reading,translation,level,romaji
+食べる,たべる,to eat,N5,taberu
+駅,えき,station,N5,eki
+```
+
+`word`, `reading`, and `translation` are required. Optional columns are
+`level` (`N5`–`N1`, informational), `romaji`, `example`, `example_reading`,
+`example_translation`, and `tags`. Quoted commas, escaped quotes, and multiline
+cells are supported. Example sentences appear in vocabulary-only mode; choose
+one word per screen to leave them more room.
+
+Files must be UTF-8, comma-separated, at most 128 KiB, and contain at most 200
+words. Review the import preview, select **Import**, then choose **Uploaded CSV**
+or **Bundled and uploaded words** as the vocabulary source and save the screen.
+Invalid rows are reported without replacing the current list. Imported words
+belong to this widget instance and are included in screen backups. No external
+learning service, account, or firmware update is needed.
 
 All content screens use the same editable widgets. On upgrade, existing
 Calendar and To Do screens become regular screens automatically, and widgets

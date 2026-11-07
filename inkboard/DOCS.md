@@ -100,6 +100,22 @@ and each display's **Device details and display settings**. The current-screen
 selector remains visible. Expand **Display diagnostics** below the screen list
 to hide the test pattern; it remains a fallback if no other screen exists.
 
+### Japanese Study
+
+Add **Japanese Study** alone on a screen for full-screen vocabulary and beginner
+grammar. Choose N5 starter or travel vocabulary, one to three words, optional
+romaji, and a beginner grammar proficiency/focus. The curated packs are not
+official or exhaustive JLPT lists. Lessons start with **ます**, and advance daily
+or hourly for vocabulary and daily or weekly for grammar from the instance's
+course start date. Refreshes do not advance the course.
+
+Import a UTF-8 CSV under **Uploaded words**, preview it, and select **Import**.
+Required columns: `word,reading,translation`. Optional columns: `level`, `romaji`,
+`example`, `example_reading`, `example_translation`, and `tags`. Files are limited
+to 128 KiB and 200 words. Choose **Uploaded CSV** or **Bundled and uploaded words**
+and save the screen. Imported words stay with the widget and are included in
+portable backups. No account or firmware changes are required.
+
 ## Data and backups
 
 Screens, settings, the generated device token, saved calendar events, cached

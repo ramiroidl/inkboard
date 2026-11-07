@@ -26,6 +26,7 @@ const WIDGET_TYPES = [
   "divider",
   "entity",
   "heading",
+  "japanese",
   "text",
   "todo",
 ];

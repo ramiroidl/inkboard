@@ -94,6 +94,31 @@ summary:focus-visible {
   font-size: 1rem;
 }
 
+.csv-setting {
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+}
+
+.csv-preview {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.csv-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.csv-preview th,
+.csv-preview td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #a6a79f;
+  overflow-wrap: anywhere;
+}
+
 .device-list {
   display: grid;
   gap: 28px;

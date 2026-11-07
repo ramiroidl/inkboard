@@ -22,6 +22,17 @@ hosting, widget-rendering, and display-request flow, or the
 Use Node.js 24.22.1 and npm 11.19.1. The repository includes `.nvmrc` and
 `.node-version` files for Node version managers.
 
+SVG rendering needs system fonts. The Docker image includes DejaVu Sans,
+Symbola, and Noto Sans CJK JP. On Debian/Ubuntu, install their equivalents
+before rendering or running the image tests:
+
+```sh
+sudo apt-get install fontconfig fonts-dejavu-core fonts-symbola fonts-noto-cjk
+```
+
+On other systems, install Noto Sans CJK JP with the system font manager.
+`fc-match 'Noto Sans CJK JP'` should resolve the Japanese font on Linux.
+
 ```powershell
 npm ci
 npm run build

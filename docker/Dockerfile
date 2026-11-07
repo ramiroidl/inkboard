@@ -25,7 +25,7 @@ ENV INKBOARD_DATA_DIR=/data \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core fonts-symbola \
+    && apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core fonts-symbola fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/package.json /app/package-lock.json ./

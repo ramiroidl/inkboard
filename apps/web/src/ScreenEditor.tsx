@@ -10,6 +10,9 @@ import type {
   WidgetSettingSchema,
 } from "@inkboard/contracts";
 
+import { CsvSetting } from "./CsvSetting.js";
+import { newWidget } from "./widget-defaults.js";
+
 const MAX_WIDGETS = 12;
 
 async function readError(response: Response, fallback: string): Promise<string> {
@@ -18,10 +21,6 @@ async function readError(response: Response, fallback: string): Promise<string> 
     message?: string;
   } | null;
   return body?.message ?? body?.error ?? `${fallback} (${response.status})`;
-}
-
-function newWidget(descriptor: WidgetDescriptor): ScreenWidget {
-  return { type: descriptor.type, ...structuredClone(descriptor.defaultConfig) };
 }
 
 function useSuggestions(source: WidgetSettingSchema["x-suggest"]) {
@@ -162,6 +161,7 @@ function SettingField({
             />
           ) : (
             <input
+              type={schema["x-input"] === "date" ? "date" : "text"}
               maxLength={schema.maxLength}
               placeholder={placeholder}
               list={schema["x-suggest"] === "entity" ? suggestionsId : undefined}
@@ -186,6 +186,9 @@ function SettingField({
         </label>
       );
     case "array": {
+      if (schema["x-input"] === "csv") {
+        return <CsvSetting name={name} schema={schema} value={value} onChange={onChange} />;
+      }
       if (
         (schema["x-suggest"] !== "entity" && schema["x-suggest"] !== "todo-list") ||
         schema.items?.type !== "string"
@@ -278,11 +281,13 @@ function WidgetSettings({
 export function ScreenEditor({
   screen,
   widgetTypes,
+  timeZone,
   onSaved,
   onCancel,
 }: {
   screen: CustomScreen | null;
   widgetTypes: WidgetDescriptor[];
+  timeZone: string;
   onSaved: () => void;
   onCancel: () => void;
 }) {
@@ -294,7 +299,10 @@ export function ScreenEditor({
     const starters = ["heading", "datetime"]
       .map((type) => descriptors.get(type))
       .filter((descriptor): descriptor is WidgetDescriptor => descriptor !== undefined);
-    return { name: "New screen", widgets: starters.map(newWidget) };
+    return {
+      name: "New screen",
+      widgets: starters.map((descriptor) => newWidget(descriptor, timeZone)),
+    };
   });
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -455,7 +463,7 @@ export function ScreenEditor({
               if (descriptor !== undefined) {
                 setDraft((current) => ({
                   ...current,
-                  widgets: [...current.widgets, newWidget(descriptor)],
+                  widgets: [...current.widgets, newWidget(descriptor, timeZone)],
                 }));
               }
             }}

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import japanese from "./widgets/japanese/index.js";
 
 const directories: string[] = [];
 
@@ -34,6 +35,130 @@ async function importBackup(app: App, backup: unknown) {
 }
 
 describe("backup", () => {
+  it("persists Japanese CSV words, serves a device image, and round-trips instance settings", async () => {
+    const source = await createApp();
+    const widgets = [
+      {
+        type: "japanese",
+        ...japanese.defaultConfig,
+        source: "uploaded",
+        startDate: "2026-11-06",
+        showRomaji: true,
+        words: [
+          {
+            word: "猫",
+            reading: "ねこ",
+            translation: "cat",
+            romaji: "neko",
+            level: "N5",
+            example: "猫がいます。",
+            example_reading: "ねこがいます。",
+            example_translation: "There is a cat.",
+          },
+        ],
+      },
+    ];
+    const created = await source.inject({
+      method: "POST",
+      url: "/api/v1/admin/screens",
+      payload: { name: "Japanese", widgets },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json<{ id: string }>().id;
+    expect(
+      (await source.inject({ method: "GET", url: `/api/v1/admin/screens/${id}` })).json(),
+    ).toMatchObject({ widgets });
+    const preview = await source.inject({
+      method: "GET",
+      url: `/api/v1/admin/screens/${id}/preview.bmp`,
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.rawPayload).toHaveLength(48_062);
+    const rotation = await source.inject({
+      method: "PUT",
+      url: "/api/v1/admin/rotation",
+      payload: { screenIds: [id], intervalMinutes: 15 },
+    });
+    expect(rotation.statusCode).toBe(200);
+    expect(
+      (
+        await source.inject({
+          method: "POST",
+          url: "/api/v1/device/check-in",
+          headers: { authorization: "Bearer test-device-token-with-at-least-32-characters" },
+          payload: {
+            deviceId: "japanese-test",
+            firmwareVersion: "test",
+            model: "seeed-ee04-800x480-mono",
+            width: 800,
+            height: 480,
+            wakeReason: "cold_boot",
+            buttonEvent: "none",
+            displayResult: "boot",
+          },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await source.inject({
+          method: "PUT",
+          url: "/api/v1/admin/devices/japanese-test/screen",
+          payload: { screenId: id },
+        })
+      ).statusCode,
+    ).toBe(200);
+    const image = await source.inject({
+      method: "GET",
+      url: "/api/v1/device/image.bmp?device=japanese-test",
+      headers: { authorization: "Bearer test-device-token-with-at-least-32-characters" },
+    });
+    expect(image.statusCode).toBe(200);
+    expect(image.headers["x-screen-id"]).toBe(id);
+    expect(image.rawPayload).toHaveLength(48_062);
+    expect(
+      (
+        await source.inject({
+          method: "GET",
+          url: "/api/v1/device/image.bmp?device=japanese-test",
+          headers: {
+            authorization: "Bearer test-device-token-with-at-least-32-characters",
+            "if-none-match": image.headers.etag!,
+          },
+        })
+      ).statusCode,
+    ).toBe(304);
+    const exported = (
+      await source.inject({ method: "GET", url: "/api/v1/admin/backup" })
+    ).json<InkboardBackup>();
+    const target = await createApp();
+    expect((await importBackup(target, exported)).json()).toMatchObject({
+      screensCreated: 1,
+      warnings: [],
+    });
+    const restored = (
+      await target.inject({ method: "GET", url: "/api/v1/admin/backup" })
+    ).json<InkboardBackup>();
+    expect(restored.screens[0]!.widgets).toEqual(widgets);
+    for (const words of [
+      [{ word: "猫", reading: "", translation: "cat" }],
+      [{ word: "猫", reading: "ねこ", translation: "cat", unexpected: "value" }],
+      Array.from({ length: 201 }, () => ({ word: "猫", reading: "ねこ", translation: "cat" })),
+    ]) {
+      expect(
+        (
+          await source.inject({
+            method: "POST",
+            url: "/api/v1/admin/screens",
+            payload: { name: "Invalid", widgets: [{ ...widgets[0], words }] },
+          })
+        ).statusCode,
+      ).toBe(400);
+    }
+    await target.close();
+    await source.close();
+  });
+
   it.each([1, 2] as const)(
     "imports version %s selections without requiring connections",
     async (version) => {

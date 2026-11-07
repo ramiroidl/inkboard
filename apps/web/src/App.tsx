@@ -315,6 +315,7 @@ export function App() {
             key={editor.mode === "edit" ? editor.screen.id : "new"}
             screen={editor.mode === "edit" ? editor.screen : null}
             widgetTypes={widgetTypes}
+            timeZone={schedule?.timeZone ?? "UTC"}
             onCancel={() => setEditor({ mode: "closed" })}
             onSaved={() => {
               setEditor({ mode: "closed" });

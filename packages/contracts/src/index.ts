@@ -288,8 +288,10 @@ export interface WidgetSettingSchema {
   items?: WidgetSettingSchema;
   maxItems?: number;
   uniqueItems?: boolean;
-  /** Editor hint: `textarea` renders a multi-line input. */
-  "x-input"?: "textarea";
+  /** Editor hints for multi-line text, a date, or an array of CSV records. */
+  "x-input"?: "textarea" | "date" | "csv";
+  /** Applied only when adding a new widget, using the controller's time zone. */
+  "x-default"?: "today";
   /**
    * Editor hint: suggest Home Assistant entity IDs, optionally limited to these domains. On an
    * array of strings, the editor shows a checkbox per matching entity.

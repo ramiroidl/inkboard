@@ -79,13 +79,15 @@ screen still renders.
 `configSchema` is standard JSON Schema built with TypeBox. The editor reads
 these keywords:
 
-| Schema                                                       | Form control    |
-| ------------------------------------------------------------ | --------------- |
-| `Type.String()`                                              | Text input      |
-| `Type.String({ "x-input": "textarea" })`                     | Multi-line text |
-| `Type.Integer()` / `Type.Number()` with `minimum`, `maximum` | Number input    |
-| `Type.Boolean()`                                             | Checkbox        |
-| `Type.Union([Type.Literal("a", { title: "A" }), …])`         | Drop-down       |
+| Schema                                                       | Form control                               |
+| ------------------------------------------------------------ | ------------------------------------------ |
+| `Type.String()`                                              | Text input                                 |
+| `Type.String({ "x-input": "textarea" })`                     | Multi-line text                            |
+| `Type.String({ "x-input": "date", "x-default": "today" })`   | Date input, initialized on adding a widget |
+| `Type.Array(Type.Object(...), { "x-input": "csv" })`         | Validated CSV file import with preview     |
+| `Type.Integer()` / `Type.Number()` with `minimum`, `maximum` | Number input                               |
+| `Type.Boolean()`                                             | Checkbox                                   |
+| `Type.Union([Type.Literal("a", { title: "A" }), …])`         | Drop-down                                  |
 
 `title` labels the field, `description` appears below it, and the first entry
 of `examples` is the placeholder. `minLength`, `maxLength`, `pattern`,
@@ -93,6 +95,17 @@ of `examples` is the placeholder. `minLength`, `maxLength`, `pattern`,
 `EntityIdSchema()` for a Home Assistant entity ID with suggestions, and
 `EntityIdListSchema({ domains: ["calendar"] })` for several entities, shown as
 checkboxes, and `TodoListIdsSchema()` for Microsoft To Do lists.
+
+For CSV settings, record properties must be strings. The object's required
+properties define the required column headers; optional properties are optional
+columns. The importer enforces `minLength`, `maxLength`, `pattern`, and the
+array's `maxItems`, rejecting malformed input without updating the current
+records. CSV is UTF-8, comma-separated, and limited to 128 KiB. Records are
+stored directly in the instance's settings, so existing screen saves and
+backups include them.
+
+`"x-default": "today"` initializes a date only when a widget is added, using
+the controller's time zone. Saved dates are never rewritten on refresh.
 
 Stored settings must match the schema exactly. If you change a schema, keep old
 settings valid (add optional properties, or properties with defaults handled in
