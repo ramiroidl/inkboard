@@ -66,9 +66,10 @@ docker run --rm -p 18099:8099 -p 18100:8100 -v inkboard-app-data:/data `
 
 ## Release the App
 
-The `Home Assistant App image` workflow builds `ghcr.io/ramiroidl/inkboard-amd64`
-and `-aarch64` on pushes to `main` that change the App, and tags them with the
-version in `inkboard/config.yaml`. To publish an update:
+The `Home Assistant App image` workflow builds
+`ghcr.io/ramiroidl/amd64-addon-inkboard` and `aarch64-addon-inkboard` on
+pushes to `main` that change the App, and tags them with the version in
+`inkboard/config.yaml`. To publish an update:
 
 1. Raise `version` in `inkboard/config.yaml` and add an entry to
    `inkboard/CHANGELOG.md`.

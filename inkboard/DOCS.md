@@ -30,7 +30,7 @@ needs credentials:
 - Under **Settings → Add-ons → Add-on store → ⋮ → Registries**, add `ghcr.io`
   with your GitHub user name and a token that has the `read:packages` scope.
 
-Making the repository and the `inkboard-amd64` / `inkboard-aarch64` packages
+Making the repository and the `amd64-addon-inkboard` / `aarch64-addon-inkboard` packages
 public avoids both steps.
 
 ## Connect the display

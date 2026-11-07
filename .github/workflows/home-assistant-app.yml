@@ -38,7 +38,7 @@ jobs:
           test -n "$version"
           owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "image=ghcr.io/$owner/inkboard-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/$owner/${{ matrix.arch }}-addon-inkboard" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3

@@ -6,7 +6,7 @@ url: https://github.com/ramiroidl/inkboard
 arch:
   - amd64
   - aarch64
-image: ghcr.io/ramiroidl/inkboard-{arch}
+image: ghcr.io/ramiroidl/{arch}-addon-inkboard
 init: false
 startup: application
 boot: auto
