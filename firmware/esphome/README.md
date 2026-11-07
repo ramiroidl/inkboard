@@ -51,8 +51,8 @@ sample, an image download, one full e-paper refresh, and a device check-in. The
 first image is the test pattern: a white background with a black square at the
 top left, an outlined circle at the top right, a triangle at the bottom left,
 nested rectangles at the bottom right, and readable text in the center. If an
-older build shows reversed colors, install the latest firmware over Wi-Fi, then
-press **Inkboard OG Force Redraw** once.
+build shows reversed colors, press **Inkboard OG Force Redraw** once. If that does
+not help, tick **Invert colors** on the display's card on the Inkboard page.
 
 ## Device status and buttons
 

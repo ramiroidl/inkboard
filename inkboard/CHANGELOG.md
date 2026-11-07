@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.2
+
+- **Invert colors** option for each display, for panels that show a black background.
+  No firmware change is needed.
+
 ## 0.7.1
 
 - Month calendar: show the full month name down the left side, or hide it, and choose

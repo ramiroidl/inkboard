@@ -12,6 +12,7 @@ import { JsonFetchCache } from "./integrations/http-json.js";
 import { MicrosoftGraphTodoClient } from "./integrations/microsoft-graph-todo.js";
 import { MicrosoftIdentityClient } from "./integrations/microsoft-identity.js";
 import { SettingsStore } from "./db/settings-store.js";
+import { DisplaySettings } from "./devices/display-settings.js";
 import { SecretBox } from "./security/secret-box.js";
 import { TodoService } from "./todo/todo-service.js";
 import { microsoftTodoRoutes } from "./routes/microsoft-todo.js";
@@ -103,6 +104,7 @@ export async function buildApp(
     },
   );
   await todoService.initialize();
+  const displaySettings = new DisplaySettings(new SettingsStore(database, now));
   const screenService = new ScreenService(
     database,
     calendarService,
@@ -126,13 +128,16 @@ export async function buildApp(
       appMode: config.appMode,
       devicePort: config.devicePort,
       deviceApiToken: config.deviceApiToken,
+      displaySettings,
     }),
   );
   await app.register(microsoftTodoRoutes(todoService));
   await app.register(
     backupRoutes(new BackupService(screenService, calendarService, todoService, now)),
   );
-  await app.register(deviceRoutes(screenService, database, config.deviceApiToken, now));
+  await app.register(
+    deviceRoutes(screenService, database, config.deviceApiToken, now, displaySettings),
+  );
   if (config.enableDevelopmentRoutes) {
     await app.register(developmentRoutes(artifactService));
   }

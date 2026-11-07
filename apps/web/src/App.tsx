@@ -128,6 +128,22 @@ export function App() {
     await reloadScreens();
   };
 
+  const setInvertColors = async (deviceId: string, invertColors: boolean) => {
+    const response = await fetch(`api/v1/admin/devices/${encodeURIComponent(deviceId)}/display`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ invertColors }),
+    });
+    if (!response.ok) {
+      setError(`Unable to update the display (${response.status})`);
+      return;
+    }
+    setError(null);
+    setDevices((current) =>
+      current.map((device) => (device.id === deviceId ? { ...device, invertColors } : device)),
+    );
+  };
+
   const selectScreen = async (deviceId: string, screenId: ScreenId) => {
     const response = await fetch(`api/v1/admin/devices/${encodeURIComponent(deviceId)}/screen`, {
       method: "PUT",
@@ -254,6 +270,18 @@ export function App() {
                   </select>
                   <small>Applied on the device&apos;s next refresh or button press.</small>
                 </label>
+                <label className="inline-field">
+                  <input
+                    type="checkbox"
+                    checked={device.invertColors}
+                    onChange={(event) => void setInvertColors(device.id, event.target.checked)}
+                  />
+                  Invert colors
+                </label>
+                <small className="hint">
+                  Turn on if this display shows a black background where the previews are white.
+                  Applied on its next refresh.
+                </small>
               </article>
             ))}
           </div>

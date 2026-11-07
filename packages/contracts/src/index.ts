@@ -197,6 +197,8 @@ export interface AdminDevice {
   lastButtonEvent: string;
   lastDisplayResult: string;
   currentScreenId: ScreenId;
+  /** The controller flips this display's images, for panels that show white on black. */
+  invertColors: boolean;
 }
 
 export interface AdminDevicesResponse {

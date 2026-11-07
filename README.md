@@ -294,8 +294,10 @@ and that `inkboard_controller_url` uses the IP address and port **8100**.
 - Connection errors: the Inkboard App is not running, the port under the App's
   **Network** section is not 8100, or a firewall blocks it.
 
-**Reversed colors.** Install the latest firmware, then press **Inkboard OG
-Force Redraw** in Home Assistant once.
+**Reversed colors (black background).** Turn maintenance mode on and press
+**Inkboard OG Force Redraw** in Home Assistant once. If the colors are still
+reversed, tick **Invert colors** on the display's card on the Inkboard page;
+the display picks it up on its next refresh, without reinstalling the firmware.
 
 **A wireless firmware update fails.** Turn maintenance mode on, or press a key
 and start the install while the display is awake. As a last resort, reinstall

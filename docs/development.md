@@ -90,7 +90,8 @@ Widgets are plugins under `apps/controller/src/widgets/<type>/`. See
 
 - `GET /health/live`, `GET /health/ready`
 - `GET /api/v1/admin/status`
-- `GET /api/v1/admin/devices`, `PUT /api/v1/admin/devices/:deviceId/screen`
+- `GET /api/v1/admin/devices`, `PUT /api/v1/admin/devices/:deviceId/screen`,
+  `PUT /api/v1/admin/devices/:deviceId/display`
 - `GET /api/v1/admin/widgets`
 - `GET /api/v1/admin/entities?domain=sensor`
 - `GET|POST /api/v1/admin/screens`, `GET|PUT|DELETE /api/v1/admin/screens/:screenId`

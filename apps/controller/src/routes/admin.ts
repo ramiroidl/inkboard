@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { SEEED_EE04_DISPLAY_PROFILE } from "@inkboard/contracts";
 import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import { Type } from "@sinclair/typebox";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import {
   InvalidCalendarSelectionError,
@@ -11,6 +11,7 @@ import {
   type CalendarService,
 } from "../calendar/calendar-service.js";
 import type { InkboardDatabase } from "../db/database.js";
+import type { DisplaySettings } from "../devices/display-settings.js";
 import { devices } from "../db/schema.js";
 import {
   CustomScreenInputSchema,
@@ -67,6 +68,7 @@ export interface AdminRuntime {
   appMode: "standalone" | "home_assistant";
   devicePort: number | null;
   deviceApiToken: string;
+  displaySettings: DisplaySettings;
 }
 
 export function adminRoutes(
@@ -263,6 +265,7 @@ export function adminRoutes(
                   lastButtonEvent: Type.String(),
                   lastDisplayResult: Type.String(),
                   currentScreenId: ScreenIdSchema,
+                  invertColors: Type.Boolean(),
                 }),
               ),
             }),
@@ -286,6 +289,7 @@ export function adminRoutes(
             lastButtonEvent: device.lastButtonEvent,
             lastDisplayResult: device.lastDisplayResult,
             currentScreenId: screenService.resolveScreenId(device.currentScreenId),
+            invertColors: runtime.displaySettings.invertColors(device.id),
           })),
         };
       },
@@ -536,6 +540,33 @@ export function adminRoutes(
           return reply.code(404).send({ error: "Device not found" });
         }
         return { deviceId: request.params.deviceId, currentScreenId: screenId };
+      },
+    );
+
+    app.put(
+      "/api/v1/admin/devices/:deviceId/display",
+      {
+        schema: {
+          params: Type.Object({ deviceId: Type.String({ minLength: 1, maxLength: 64 }) }),
+          body: Type.Object({ invertColors: Type.Boolean() }, { additionalProperties: false }),
+          response: {
+            200: Type.Object({ deviceId: Type.String(), invertColors: Type.Boolean() }),
+            404: ErrorSchema,
+          },
+        },
+      },
+      async (request, reply) => {
+        const { deviceId } = request.params;
+        const known = database.orm
+          .select({ id: devices.id })
+          .from(devices)
+          .where(eq(devices.id, deviceId))
+          .get();
+        if (known === undefined) {
+          return reply.code(404).send({ error: "Device not found" });
+        }
+        runtime.displaySettings.setInvertColors(deviceId, request.body.invertColors);
+        return { deviceId, invertColors: runtime.displaySettings.invertColors(deviceId) };
       },
     );
   };

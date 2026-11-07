@@ -13,6 +13,8 @@ import { eq } from "drizzle-orm";
 
 import type { InkboardDatabase } from "../db/database.js";
 import { deviceCheckIns, devices } from "../db/schema.js";
+import { SettingsStore } from "../db/settings-store.js";
+import { DisplaySettings, invertBmpPixels, screenRevision } from "../devices/display-settings.js";
 import { ScreenIdSchema, type ScreenService } from "../screens/screen-service.js";
 
 function hasValidBearerToken(authorization: string | undefined, expectedToken: string): boolean {
@@ -30,6 +32,7 @@ export function deviceRoutes(
   database: InkboardDatabase,
   deviceApiToken: string,
   clock: () => Date = () => new Date(),
+  displaySettings: DisplaySettings = new DisplaySettings(new SettingsStore(database, clock)),
 ): FastifyPluginAsyncTypebox {
   const storedScreenId = (deviceId: string): string | null =>
     database.orm
@@ -68,7 +71,9 @@ export function deviceRoutes(
         }
         const screenId = screenService.currentScreenForDevice(deviceId ?? null);
         const artifact = await screenService.getArtifact(screenId);
-        const etag = `"sha256:${artifact.checksum}"`;
+        const inverted = displaySettings.invertColors(deviceId);
+        const revision = screenRevision(artifact.checksum, inverted);
+        const etag = `"${revision}"`;
         reply.header("X-Screen-Id", screenId);
         if (request.headers["if-none-match"] === etag) {
           return reply.code(304).send();
@@ -78,9 +83,9 @@ export function deviceRoutes(
         return reply
           .header("ETag", etag)
           .header("Cache-Control", "private, no-cache")
-          .header("X-Screen-Revision", `sha256:${artifact.checksum}`)
+          .header("X-Screen-Revision", revision)
           .type("image/bmp")
-          .send(bmp);
+          .send(inverted ? invertBmpPixels(bmp) : bmp);
       },
     );
 
@@ -209,7 +214,10 @@ export function deviceRoutes(
           status: "ok" as const,
           serverTime: now,
           nextRefreshSeconds: screenService.nextRefreshSeconds(body.deviceId),
-          screenRevision: `sha256:${artifact.checksum}`,
+          screenRevision: screenRevision(
+            artifact.checksum,
+            displaySettings.invertColors(body.deviceId),
+          ),
           screenId,
         };
       },
