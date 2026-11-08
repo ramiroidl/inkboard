@@ -123,7 +123,9 @@ async function checkIn(
 
 describe("custom screens", () => {
   it("migrates inherited selections and customized screen references once", async () => {
-    const { app, config, authorization, clock } = await createApp({ homeAssistant: true });
+    const { app, config, authorization, clock, fetchImplementation } = await createApp({
+      homeAssistant: true,
+    });
     const created = await app.inject({
       method: "POST",
       url: "/api/v1/admin/screens",
@@ -167,7 +169,7 @@ describe("custom screens", () => {
     database.raw.prepare("DELETE FROM custom_screens WHERE id = ?").run("calendar");
     database.close();
 
-    let restarted = await buildApp(config, { now: () => clock.now });
+    let restarted = await buildApp(config, { fetchImplementation, now: () => clock.now });
     const read = async () =>
       (
         await restarted.inject({
@@ -194,7 +196,7 @@ describe("custom screens", () => {
       payload: { name: "My agenda", widgets: [{ type: "calendar", maxEvents: 3, calendars: [] }] },
     });
     await restarted.close();
-    restarted = await buildApp(config, { now: () => clock.now });
+    restarted = await buildApp(config, { fetchImplementation, now: () => clock.now });
     expect((await read()).widgets).toEqual([{ type: "calendar", maxEvents: 3, calendars: [] }]);
     await restarted.inject({ method: "DELETE", url: `/api/v1/admin/screens/${id}` });
     expect(
@@ -205,7 +207,7 @@ describe("custom screens", () => {
       schedules: [],
     });
     await restarted.close();
-    restarted = await buildApp(config, { now: () => clock.now });
+    restarted = await buildApp(config, { fetchImplementation, now: () => clock.now });
     expect(
       (await restarted.inject({ method: "GET", url: "/api/v1/admin/screens" })).json(),
     ).toMatchObject({ screens: [{ id: "orientation" }] });
