@@ -1,6 +1,7 @@
 import sharp from "sharp";
 
-const BADGE_WIDTH = 60;
+/** Wide enough for "100%" to sit right of the icon without overlapping it. */
+const BADGE_WIDTH = 76;
 const BADGE_HEIGHT = 22;
 /** Right edge lines up with the screen content and footer rule; bottom sits in the footer. */
 const RIGHT_MARGIN = 32;
@@ -23,11 +24,16 @@ export function batteryStep(percent: number): number {
 
 export function batteryBadgeSvg(percent: number): string {
   const fill = Math.round((18 * percent) / 100);
+  // DejaVu Sans Bold advances: digits 0.696 em, "%" 1.002 em at 12 px.
+  const textWidth = String(percent).length * 8.35 + 12;
+  const iconX = Math.round(BADGE_WIDTH - 1 - textWidth - 4 - 25);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${BADGE_WIDTH}" height="${BADGE_HEIGHT}" viewBox="0 0 ${BADGE_WIDTH} ${BADGE_HEIGHT}">
   <rect width="${BADGE_WIDTH}" height="${BADGE_HEIGHT}" fill="white"/>
-  <rect x="3" y="5" width="22" height="12" fill="none" stroke="black" stroke-width="1.5"/>
-  <rect x="25" y="8.5" width="2.5" height="5" fill="black"/>
-  ${fill > 0 ? `<rect x="5" y="7" width="${fill}" height="8" fill="black"/>` : ""}
+  <g transform="translate(${iconX - 3} 0)">
+    <rect x="3" y="5" width="22" height="12" fill="none" stroke="black" stroke-width="1.5"/>
+    <rect x="25" y="8.5" width="2.5" height="5" fill="black"/>
+    ${fill > 0 ? `<rect x="5" y="7" width="${fill}" height="8" fill="black"/>` : ""}
+  </g>
   <text x="${BADGE_WIDTH - 1}" y="16" font-family="${FONT}" font-size="12" font-weight="700" text-anchor="end">${percent}%</text>
 </svg>`;
 }

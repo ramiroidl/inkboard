@@ -168,7 +168,7 @@ describe("battery indicator", () => {
     expect(changedRows.size).toBeGreaterThan(0);
     expect(Math.min(...changedRows)).toBeGreaterThanOrEqual(480 - 3 - 22);
     expect(Math.max(...changedRows)).toBeLessThan(480 - 3);
-    expect(Math.min(...changedColumns)).toBeGreaterThanOrEqual(800 - 32 - 60 - 8);
+    expect(Math.min(...changedColumns)).toBeGreaterThanOrEqual(800 - 32 - 76 - 8);
     expect(Math.max(...changedColumns)).toBeLessThan(800 - 32);
 
     // Small voltage changes in the same 5 % step keep the image.

@@ -138,6 +138,9 @@ function microsoft() {
       }
       const match = /^\/v1\.0\/me\/todo\/lists\/([^/]+)\/tasks$/.exec(url.pathname);
       if (match !== null) {
+        if (url.searchParams.get("$filter") !== "status ne 'completed'") {
+          throw new Error(`Tasks must be filtered on the server: ${url.href}`);
+        }
         return Response.json({ value: state.tasks[decodeURIComponent(match[1]!)] ?? [] });
       }
     }

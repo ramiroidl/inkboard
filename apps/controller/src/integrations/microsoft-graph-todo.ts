@@ -57,8 +57,11 @@ export class MicrosoftGraphTodoClient {
 
   /** Incomplete tasks of one list. */
   public async listTasks(accessToken: string, list: TodoListSummary): Promise<TodoTask[]> {
+    // Filtering on the server keeps long histories of completed tasks from pushing open
+    // tasks past the page limit.
+    const filter = encodeURIComponent("status ne 'completed'");
     const items = await this.getAll(
-      `${GRAPH}/me/todo/lists/${encodeURIComponent(list.id)}/tasks?$top=100`,
+      `${GRAPH}/me/todo/lists/${encodeURIComponent(list.id)}/tasks?$filter=${filter}&$top=100`,
       accessToken,
     );
     return items.flatMap((item): TodoTask[] => {

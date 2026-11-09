@@ -80,9 +80,14 @@ export function deviceRoutes(
         }
 
         const deviceId = request.query.device;
+        // Displays always send the header, empty when the panel shows no known image.
+        const ifNoneMatch = (request.headers["if-none-match"] ?? "")
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter((tag) => tag !== "");
         if (
           deviceId !== undefined &&
-          request.headers["if-none-match"] !== undefined &&
+          ifNoneMatch.length > 0 &&
           screenService.isQuietHours() &&
           !screenService.hasRecentManualRequest(deviceId)
         ) {
@@ -95,8 +100,8 @@ export function deviceRoutes(
         const revision = screenRevision(artifact.checksum, variant);
         const etag = `"${revision}"`;
         reply.header("X-Screen-Id", screenId);
-        if (request.headers["if-none-match"] === etag) {
-          return reply.code(304).send();
+        if (ifNoneMatch.includes(etag)) {
+          return reply.header("ETag", etag).code(304).send();
         }
 
         let bmp: Buffer = await readFile(artifact.filePath);

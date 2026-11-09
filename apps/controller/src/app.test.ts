@@ -107,6 +107,14 @@ describe("controller", () => {
     });
     expect(unchanged.statusCode).toBe(304);
     expect(unchanged.rawPayload).toHaveLength(0);
+    expect(unchanged.headers.etag).toBe(first.headers.etag);
+
+    const listed = await app.inject({
+      method: "GET",
+      url: "/api/v1/device/image.bmp",
+      headers: { authorization, "if-none-match": `"sha256:old", ${first.headers.etag!}` },
+    });
+    expect(listed.statusCode).toBe(304);
 
     await app.close();
   });

@@ -190,6 +190,8 @@ describe("screen schedules", () => {
     expect(frozen.headers["x-quiet-hours"]).toBe("1");
     // A device without an image still gets one.
     expect((await image()).statusCode).toBe(200);
+    // Firmware sends an empty header when its panel shows no known image.
+    expect((await image("")).statusCode).toBe(200);
     // Sleep until quiet hours end: nine real hours across the daylight-saving change.
     expect((await checkIn()).nextRefreshSeconds).toBe(9 * 3600 + 5);
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.4
+
+- The battery badge no longer hides the "1" of "100%" under the battery icon.
+- Microsoft To Do asks Graph for open tasks only, so lists with a long history of
+  completed tasks no longer hide newly added tasks.
+- The display image accepts an empty or comma-separated `If-None-Match` header, so
+  firmware can always send the ETag it remembers.
+
 ## 0.8.3
 
 - Firmware 0.5.1 fixes displays that stopped refreshing with maintenance mode off. The
