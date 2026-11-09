@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.3
+
+- Firmware 0.5.1 fixes displays that stopped refreshing with maintenance mode off. The
+  2-minute awake limit ran within seconds of every wake, so the display went back to sleep
+  before connecting. Install the updated `inkboard-og.yaml` from ESPHome Device Builder.
+
 ## 0.8.2
 
 - **Hide** any screen to keep it without showing it on displays. Rotation, schedules, and

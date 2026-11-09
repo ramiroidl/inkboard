@@ -1,7 +1,7 @@
 substitutions:
   device_name: inkboard-og
   friendly_name: Inkboard OG
-  firmware_version: "0.5.0"
+  firmware_version: "0.5.1"
   sleep_duration: 15min
   awake_refresh_interval: 15min
   # Time awake after a refresh before sleeping; long enough to finish the check-in.
@@ -27,6 +27,7 @@ esphome:
         - deep_sleep.prevent: deep_sleep_control
     - priority: -200
       then:
+        - script.execute: awake_guard
         # A restored maintenance mode still times out.
         - if:
             condition:
@@ -385,6 +386,21 @@ script:
                   format: "Unable to report the device check-in"
       - lambda: id(pending_button_event) = "none";
 
+  # Limits each wake to 2 minutes so a failed request cannot drain the battery. This must be
+  # a one-shot delay from boot: an `interval` would first run within 5 s of boot and put the
+  # display to sleep before it refreshes.
+  - id: awake_guard
+    mode: single
+    then:
+      - delay: 2min
+      - if:
+          condition:
+            switch.is_off: maintenance_mode
+          then:
+            - logger.log: "Maximum awake duration reached; entering deep sleep"
+            - output.turn_off: display_enable
+            - deep_sleep.enter: deep_sleep_control
+
   - id: maintenance_timeout
     mode: restart
     then:
@@ -441,19 +457,11 @@ deep_sleep:
               id(pending_button_event) = "next";
 
 interval:
-  - interval: 2min
-    then:
-      - if:
-          condition:
-            switch.is_off: maintenance_mode
-          then:
-            - logger.log: "Maximum awake duration reached; entering deep sleep"
-            - output.turn_off: display_enable
-            - deep_sleep.enter: deep_sleep_control
-
   # While maintenance mode keeps the device awake, keep the panel current so screen
-  # rotation and clocks still advance.
+  # rotation and clocks still advance. ESPHome runs an interval within 5 s of boot unless
+  # it has a startup delay, and the boot sequence already requests an image.
   - interval: ${awake_refresh_interval}
+    startup_delay: ${awake_refresh_interval}
     then:
       - if:
           condition:
