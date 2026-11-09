@@ -66,6 +66,7 @@ const ROTATION_KEY = "rotation";
 const SCHEDULES_KEY = "schedules";
 const QUIET_HOURS_KEY = "quietHours";
 const TEST_PATTERN_HIDDEN_KEY = "testPatternHidden";
+const HIDDEN_SCREENS_KEY = "hiddenScreens";
 const CUSTOMIZED_BUILTINS_KEY = "customizedBuiltins";
 const INSTANCE_SELECTIONS_KEY = "widgetInstanceSelections";
 const MIGRATED_SCREENS_KEY = "migratedScreenTemplates";
@@ -201,25 +202,61 @@ export class ScreenService {
     })();
   }
 
+  /**
+   * Every screen for the admin page, including hidden ones. Displays, rotation, schedules,
+   * and buttons use only the visible ones; see `isAvailable`.
+   */
   public listScreens(): ScreenSummary[] {
     this.migrateLegacyScreens();
+    const hidden = new Set(this.readHiddenScreens());
     const custom = this.listCustomScreens().map((screen): ScreenSummary => ({
       id: screen.id,
       name: screen.name,
       description: this.describeWidgets(screen.widgets),
       kind: "custom",
+      ...(hidden.has(screen.id) ? { hidden: true } : {}),
     }));
     const migrated = Object.values(
       this.readSetting<Partial<Record<LegacyScreenId, string>>>(MIGRATED_SCREENS_KEY, {}),
     );
     const content = custom.filter((screen) => migrated.includes(screen.id));
     // The test pattern stays as a fallback so a display always has a screen.
-    const showTestPattern = !this.isTestPatternHidden() || custom.length === 0;
+    const testPatternHidden =
+      this.isTestPatternHidden() && custom.some((screen) => screen.hidden !== true);
     return [
       ...content,
-      ...(showTestPattern ? [TEST_PATTERN] : []),
+      testPatternHidden ? { ...TEST_PATTERN, hidden: true } : TEST_PATTERN,
       ...custom.filter((screen) => !migrated.includes(screen.id)),
     ];
+  }
+
+  /** Screens displays can show: everything not hidden. Never empty. */
+  public listVisibleScreens(): ScreenSummary[] {
+    return this.listScreens().filter((screen) => screen.hidden !== true);
+  }
+
+  public isHidden(screenId: string): boolean {
+    return screenId === TEST_PATTERN.id
+      ? this.listScreens().some((screen) => screen.id === screenId && screen.hidden === true)
+      : this.readHiddenScreens().includes(screenId);
+  }
+
+  /**
+   * Hides a screen from displays without deleting it. Rotation and schedule entries are kept,
+   * so showing the screen again puts it back where it was.
+   */
+  public setHidden(screenId: string, hidden: boolean): void {
+    if (screenId === TEST_PATTERN.id) {
+      this.setTestPatternHidden(hidden);
+      return;
+    }
+    this.getCustomScreen(screenId);
+    const others = this.readHiddenScreens().filter((id) => id !== screenId);
+    this.writeSetting(HIDDEN_SCREENS_KEY, hidden ? [...others, screenId] : others);
+  }
+
+  private readHiddenScreens(): string[] {
+    return this.readSetting<string[]>(HIDDEN_SCREENS_KEY, []);
   }
 
   private migrateLegacyScreens(): void {
@@ -334,11 +371,11 @@ export class ScreenService {
   }
 
   public defaultScreenId(): ScreenId {
-    return this.listScreens()[0]!.id;
+    return this.listVisibleScreens()[0]!.id;
   }
 
   public isAvailable(screenId: string): boolean {
-    return this.listScreens().some((screen) => screen.id === screenId);
+    return this.listVisibleScreens().some((screen) => screen.id === screenId);
   }
 
   public resolveScreenId(screenId: string | null | undefined): ScreenId {
@@ -348,7 +385,7 @@ export class ScreenService {
   }
 
   public navigate(current: string | null | undefined, direction: NavigationDirection): ScreenId {
-    const screens = this.listScreens();
+    const screens = this.listVisibleScreens();
     const currentId = this.resolveScreenId(current);
     const currentIndex = screens.findIndex((screen) => screen.id === currentId);
     const offset = direction === "next" ? 1 : -1;
@@ -431,16 +468,22 @@ export class ScreenService {
         SCHEDULES_KEY,
         this.readSchedules().filter((rule) => rule.screenId !== screenId),
       );
+      this.writeSetting(
+        HIDDEN_SCREENS_KEY,
+        this.readHiddenScreens().filter((id) => id !== screenId),
+      );
     })();
     this.renderCache.delete(screenId);
   }
 
   /** Rotation entries for screens that are no longer available are ignored. */
-  public getRotation(): RotationSettings {
+  public getRotation(options: { includeHidden?: boolean } = {}): RotationSettings {
     const rotation = this.readRotation();
     return {
       ...rotation,
-      screenIds: rotation.screenIds.filter((id) => this.isAvailable(id)),
+      screenIds: rotation.screenIds.filter(
+        (id) => this.isAvailable(id) || (options.includeHidden === true && this.isHidden(id)),
+      ),
     };
   }
 
@@ -452,13 +495,27 @@ export class ScreenService {
     if (new Set(rotation.screenIds).size !== rotation.screenIds.length) {
       throw new InvalidRotationError("A screen can appear in the rotation only once");
     }
-    this.writeRotation(rotation);
+    // Hidden screens keep their place for when they are shown again.
+    const kept = this.readRotation().screenIds.filter(
+      (id) => this.isHidden(id) && !rotation.screenIds.includes(id),
+    );
+    this.writeRotation({ ...rotation, screenIds: [...rotation.screenIds, ...kept] });
     return this.getRotation();
   }
 
   /** Schedule rules for screens that are no longer available are ignored. */
-  public getSchedules(): ScheduleRule[] {
-    return this.readSchedules().filter((rule) => this.isAvailable(rule.screenId));
+  public getSchedules(options: { includeHidden?: boolean } = {}): ScheduleRule[] {
+    return this.readSchedules().filter(
+      (rule) =>
+        this.isAvailable(rule.screenId) ||
+        (options.includeHidden === true && this.isHidden(rule.screenId)),
+    );
+  }
+
+  /** Custom screens that are hidden from displays. */
+  public listHiddenScreenIds(): string[] {
+    const existing = new Set(this.listCustomScreens().map((screen) => screen.id));
+    return this.readHiddenScreens().filter((id) => existing.has(id));
   }
 
   /** Rules are evaluated in order; the first active rule wins. */
@@ -485,7 +542,9 @@ export class ScreenService {
     if (new Set(rules.map((rule) => rule.id)).size !== rules.length) {
       throw new InvalidScheduleError("Rule IDs must be unique");
     }
-    this.writeSetting(SCHEDULES_KEY, rules);
+    // Rules for hidden screens are kept for when the screens are shown again.
+    const kept = this.readSchedules().filter((rule) => this.isHidden(rule.screenId));
+    this.writeSetting(SCHEDULES_KEY, [...rules, ...kept]);
     return this.getSchedules();
   }
 

@@ -226,3 +226,35 @@ describe("Japanese study rendering", () => {
     expect(await glyph("あ")).not.toEqual(await glyph("い"));
   });
 });
+
+describe("Japanese study layout", () => {
+  it("shows up to five words, each centered in its own column", async () => {
+    const lesson = lessonFor(config({ wordsPerScreen: 5 }), environment());
+    expect(lesson.words).toHaveLength(5);
+    expect(new Set(lesson.words.map((word) => word.word)).size).toBe(5);
+
+    const result = await renderWidgetForTest(
+      japanese,
+      config({ wordsPerScreen: 5, mode: "vocabulary" }),
+      environment(),
+    );
+    expect(result.hasError).toBe(false);
+    const columns = [...result.svg.matchAll(/<g transform="translate\(([\d.]+) 49\)">/g)].map(
+      (match) => Number(match[1]),
+    );
+    expect(columns).toHaveLength(5);
+    // Every word is drawn at the middle of its column.
+    const centers = [
+      ...result.svg.matchAll(/<text x="([\d.]+)" y="42"[^>]*text-anchor="middle"/g),
+    ].map((match) => Number(match[1]));
+    expect(centers).toHaveLength(5);
+    const cellWidth = columns[1]! - columns[0]! - 14;
+    for (const center of centers) {
+      expect(center).toBeCloseTo(cellWidth / 2, 5);
+    }
+    const registry = new WidgetRegistry();
+    registry.register(japanese);
+    expect(registry.check({ type: "japanese", ...config({ wordsPerScreen: 5 }) })).toBeNull();
+    expect(registry.check({ type: "japanese", ...config({ wordsPerScreen: 6 }) })).not.toBeNull();
+  });
+});

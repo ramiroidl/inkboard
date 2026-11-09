@@ -43,8 +43,8 @@ export class BackupService {
         name: screen.name,
         widgets: screen.widgets,
       })),
-      rotation: this.screenService.getRotation(),
-      schedules: this.screenService.getSchedules().map((rule) => ({
+      rotation: this.screenService.getRotation({ includeHidden: true }),
+      schedules: this.screenService.getSchedules({ includeHidden: true }).map((rule) => ({
         screenId: rule.screenId,
         days: rule.days,
         start: rule.start,
@@ -52,6 +52,7 @@ export class BackupService {
       })),
       quietHours: this.screenService.getQuietHours(),
       testPatternHidden: this.screenService.isTestPatternHidden(),
+      hiddenScreens: this.screenService.listHiddenScreenIds(),
       calendars: [],
       todoLists: [],
     };
@@ -163,6 +164,13 @@ export class BackupService {
       warnings.push(`Quiet hours were not imported: ${describe(error)}`);
     }
     this.screenService.setTestPatternHidden(backup.testPatternHidden);
+    // Hide screens last so their rotation and schedule entries are kept for later.
+    for (const screenId of backup.hiddenScreens ?? []) {
+      const mapped = idMap.get(screenId);
+      if (mapped !== undefined) {
+        this.screenService.setHidden(mapped, true);
+      }
+    }
 
     return { screensCreated: created, screensReused: reused, warnings };
   }

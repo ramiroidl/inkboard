@@ -325,7 +325,7 @@ essentials; they are not official or exhaustive JLPT lists. Advanced N4–N1
 bundled courses are not included yet, but you can import your own vocabulary.
 
 Words show their Japanese spelling, kana reading, and translation. Select one
-to three words per screen; **Show romaji when provided** is off by default.
+to five words per screen;, each centered in its column; **Show romaji when provided** is off by default.
 Grammar starts with polite **ます**, including its non-past use for habits and
 future actions. **Starting out** shows introductory lessons; **N5 / beginner
 review** also includes verb stems, irregular verbs, and additional particles.
@@ -365,8 +365,7 @@ own settings. Rotation, schedules, and device assignments are preserved.
 Deleting one of these screens does not recreate it. The test pattern is a
 diagnostic fallback, not a content widget.
 
-Expand **Display diagnostics** below the screen list and untick **Show the
-test pattern screen** to hide it once you have other screens. Device details,
+Select **Hide** on a screen to keep it without showing it on displays: rotation,`nschedules, and the display's buttons skip it, and its card stays dimmed so you`ncan still edit or preview it. **Show** puts it back where it was in the rotation`nand schedules. The test pattern can be hidden the same way once you have other`nscreens. Device details,
 connections, rotation, schedules, quiet hours, and backup controls are collapsed
 by default; screen design and each device's current-screen selector stay visible.
 

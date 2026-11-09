@@ -62,6 +62,25 @@ export function App() {
     });
   }, [reloadScreens]);
 
+  const visibleScreens = screens.filter((screen) => screen.hidden !== true);
+
+  const setScreenHidden = async (screenId: ScreenId, hidden: boolean) => {
+    const response = await fetch(
+      `api/v1/admin/screens/${encodeURIComponent(screenId)}/visibility`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ hidden }),
+      },
+    );
+    if (!response.ok) {
+      setError(`Unable to update the screen (${response.status})`);
+      return;
+    }
+    setError(null);
+    await reloadScreens();
+  };
+
   const setTestPatternVisible = async (visible: boolean) => {
     const response = await fetch("api/v1/admin/test-pattern", {
       method: "PUT",
@@ -299,7 +318,7 @@ export function App() {
                     value={device.currentScreenId}
                     onChange={(event) => void selectScreen(device.id, event.target.value)}
                   >
-                    {screens.map((screen) => (
+                    {visibleScreens.map((screen) => (
                       <option key={screen.id} value={screen.id}>
                         {screen.name}
                       </option>
@@ -344,7 +363,10 @@ export function App() {
         ) : null}
         <div className="screen-grid">
           {screens.map((screen) => (
-            <figure key={screen.id}>
+            <figure
+              key={screen.id}
+              className={screen.hidden === true ? "hidden-screen" : undefined}
+            >
               <img
                 src={`api/v1/admin/screens/${encodeURIComponent(screen.id)}/preview.bmp?v=${previewVersion}`}
                 alt={`${screen.name} preview`}
@@ -354,18 +376,31 @@ export function App() {
               <figcaption>
                 <strong>{screen.name}</strong>
                 <span>{screen.description}</span>
-                {screen.kind === "custom" ? (
-                  <span className="screen-actions">
+                {screen.hidden === true ? <span className="badge">Hidden</span> : null}
+                {screen.kind === "custom" ? null : <span className="badge">Diagnostic</span>}
+                <span className="screen-actions">
+                  {screen.kind === "custom" ? (
                     <button type="button" onClick={() => void editScreen(screen.id)}>
                       Edit
                     </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    title={
+                      screen.hidden === true
+                        ? "Show this screen on displays again"
+                        : "Keep this screen but skip it on displays, in rotation, and in schedules"
+                    }
+                    onClick={() => void setScreenHidden(screen.id, screen.hidden !== true)}
+                  >
+                    {screen.hidden === true ? "Show" : "Hide"}
+                  </button>
+                  {screen.kind === "custom" ? (
                     <button type="button" onClick={() => void deleteScreen(screen.id, screen.name)}>
                       Delete
                     </button>
-                  </span>
-                ) : (
-                  <span className="badge">Diagnostic</span>
-                )}
+                  ) : null}
+                </span>
               </figcaption>
             </figure>
           ))}
@@ -398,7 +433,7 @@ export function App() {
         {rotation !== null ? (
           <RotationEditor
             key={`${rotation.intervalMinutes}:${rotation.screenIds.join(",")}:${screens.length}`}
-            screens={screens}
+            screens={visibleScreens}
             rotation={rotation}
             onSaved={setRotation}
           />
@@ -419,7 +454,7 @@ export function App() {
         {schedule !== null ? (
           <ScheduleEditor
             key={schedule.schedules.map((rule) => rule.id).join(",") + screens.length}
-            screens={screens}
+            screens={visibleScreens}
             schedules={schedule.schedules}
             scheduleState={schedule.scheduleState}
             timeZone={schedule.timeZone}

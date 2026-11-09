@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2
+
+- **Hide** any screen to keep it without showing it on displays. Rotation, schedules, and
+  buttons skip it; showing it again restores its place. Backups keep hidden screens.
+- Japanese Study shows up to five words per screen, each centered in its column.
+
 ## 0.8.1
 
 - **Show battery** for each display: the battery level in the lower-right corner of the

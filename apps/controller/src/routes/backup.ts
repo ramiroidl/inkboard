@@ -33,6 +33,7 @@ const BackupSchema = Type.Object({
   ),
   quietHours: QuietHoursSchema,
   testPatternHidden: Type.Boolean(),
+  hiddenScreens: Type.Optional(Type.Array(ScreenIdSchema, { maxItems: 200 })),
   calendars: Type.Array(Type.String({ maxLength: 255 }), { maxItems: 10 }),
   todoLists: Type.Array(Type.String({ maxLength: 512 }), { maxItems: 20 }),
 });

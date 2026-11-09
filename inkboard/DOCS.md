@@ -103,7 +103,7 @@ to hide the test pattern; it remains a fallback if no other screen exists.
 ### Japanese Study
 
 Add **Japanese Study** alone on a screen for full-screen vocabulary and beginner
-grammar. Choose N5 starter or travel vocabulary, one to three words, optional
+grammar. Choose N5 starter or travel vocabulary, one to five words, optional
 romaji, and a beginner grammar proficiency/focus. The curated packs are not
 official or exhaustive JLPT lists. Lessons start with **ます**, and advance daily
 or hourly for vocabulary and daily or weekly for grammar from the instance's

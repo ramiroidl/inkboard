@@ -217,6 +217,8 @@ export interface ScreenSummary {
   name: string;
   description: string;
   kind: ScreenKind;
+  /** Hidden screens stay editable but are skipped by displays, rotation, and schedules. */
+  hidden?: boolean;
 }
 
 export interface RotationSettings {
@@ -337,6 +339,8 @@ export interface InkboardBackup {
   schedules: { screenId: ScreenId; days: number[]; start: string; end: string }[];
   quietHours: QuietHours;
   testPatternHidden: boolean;
+  /** Custom screens hidden from displays. Missing in older backups. */
+  hiddenScreens?: ScreenId[];
   /** Legacy selections for version 1 imports; empty in version 2 exports. */
   calendars: string[];
   /** Legacy selections for version 1 imports; empty in version 2 exports. */

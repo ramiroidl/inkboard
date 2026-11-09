@@ -393,11 +393,130 @@ describe("custom screens", () => {
 });
 
 describe("custom screen rendering helpers", () => {
+  it("hides screens from displays without deleting them", async () => {
+    const { app, authorization, clock } = await createApp();
+    const create = async (name: string) =>
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/v1/admin/screens",
+          payload: { name, widgets: [{ type: "text", text: name }] },
+        })
+      ).json<{ id: string }>().id;
+    const first = await create("First");
+    const second = await create("Second");
+    const third = await create("Third");
+    await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/test-pattern",
+      payload: { hidden: true },
+    });
+    await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/rotation",
+      payload: { screenIds: [first, second, third], intervalMinutes: 15 },
+    });
+    await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/schedules",
+      payload: { rules: [{ screenId: second, days: [1], start: "07:00", end: "09:00" }] },
+    });
+    await checkIn(app, authorization);
+    await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/devices/inkboard-og/screen",
+      payload: { screenId: second },
+    });
+
+    const missing = await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/screens/screen_missing/visibility",
+      payload: { hidden: true },
+    });
+    expect(missing.statusCode).toBe(404);
+    const hide = await app.inject({
+      method: "PUT",
+      url: `/api/v1/admin/screens/${second}/visibility`,
+      payload: { hidden: true },
+    });
+    expect(hide.json()).toEqual({ screenId: second, hidden: true });
+
+    // Still listed for editing, but skipped everywhere a display looks.
+    const listed = await app.inject({ method: "GET", url: "/api/v1/admin/screens" });
+    expect(listed.json()).toMatchObject({
+      screens: expect.arrayContaining([
+        expect.objectContaining({ id: second, hidden: true }),
+      ]) as unknown,
+      rotation: { screenIds: [first, third] },
+      schedules: [],
+    });
+    expect(await checkIn(app, authorization)).not.toBe(second);
+    expect(await checkIn(app, authorization, "next", "button")).not.toBe(second);
+    const preview = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/screens/${second}/preview.bmp`,
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(
+      (
+        await app.inject({
+          method: "PUT",
+          url: "/api/v1/admin/devices/inkboard-og/screen",
+          payload: { screenId: second },
+        })
+      ).statusCode,
+    ).toBe(400);
+
+    // Saving the rotation while it is hidden keeps its place for later.
+    await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/rotation",
+      payload: { screenIds: [third, first], intervalMinutes: 15 },
+    });
+    await app.inject({
+      method: "PUT",
+      url: `/api/v1/admin/screens/${second}/visibility`,
+      payload: { hidden: false },
+    });
+    const shown = await app.inject({ method: "GET", url: "/api/v1/admin/screens" });
+    expect(shown.json()).toMatchObject({
+      rotation: { screenIds: [third, first, second] },
+      schedules: [{ screenId: second }],
+    });
+    clock.now = new Date(clock.now.getTime() + 60_000);
+
+    // Backups keep which screens are hidden.
+    await app.inject({
+      method: "PUT",
+      url: `/api/v1/admin/screens/${third}/visibility`,
+      payload: { hidden: true },
+    });
+    const backup = (await app.inject({ method: "GET", url: "/api/v1/admin/backup" })).json<{
+      hiddenScreens: string[];
+      rotation: { screenIds: string[] };
+    }>();
+    expect(backup.hiddenScreens).toEqual([third]);
+    expect(backup.rotation.screenIds).toContain(third);
+
+    // Deleting a hidden screen removes it from the hidden list.
+    await app.inject({ method: "DELETE", url: `/api/v1/admin/screens/${third}` });
+    const afterDelete = (await app.inject({ method: "GET", url: "/api/v1/admin/backup" })).json<{
+      hiddenScreens: string[];
+    }>();
+    expect(afterDelete.hiddenScreens).toEqual([]);
+    await app.close();
+  });
+
   it("hides the test pattern unless it is the only screen", async () => {
     const { app } = await createApp();
+    // Displays and pickers use the screens that are not hidden.
     const screenIds = async () => {
       const response = await app.inject({ method: "GET", url: "/api/v1/admin/screens" });
-      return response.json<{ screens: { id: string }[]; testPatternHidden: boolean }>();
+      const body = response.json<{
+        screens: { id: string; hidden?: boolean }[];
+        testPatternHidden: boolean;
+      }>();
+      return { ...body, screens: body.screens.filter((screen) => screen.hidden !== true) };
     };
     expect(await screenIds()).toMatchObject({ testPatternHidden: false });
 

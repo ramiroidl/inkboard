@@ -310,6 +310,7 @@ export function adminRoutes(
                   name: Type.String(),
                   description: Type.String(),
                   kind: Type.Union([Type.Literal("diagnostic"), Type.Literal("custom")]),
+                  hidden: Type.Optional(Type.Boolean()),
                 }),
               ),
               rotation: RotationSettingsSchema,
@@ -348,6 +349,32 @@ export function adminRoutes(
       async (request) => {
         screenService.setTestPatternHidden(request.body.hidden);
         return { hidden: screenService.isTestPatternHidden() };
+      },
+    );
+
+    app.put(
+      "/api/v1/admin/screens/:screenId/visibility",
+      {
+        schema: {
+          params: Type.Object({ screenId: ScreenIdSchema }),
+          body: Type.Object({ hidden: Type.Boolean() }, { additionalProperties: false }),
+          response: {
+            200: Type.Object({ screenId: ScreenIdSchema, hidden: Type.Boolean() }),
+            404: ErrorSchema,
+          },
+        },
+      },
+      async (request, reply) => {
+        const { screenId } = request.params;
+        try {
+          screenService.setHidden(screenId, request.body.hidden);
+        } catch (error: unknown) {
+          if (error instanceof ScreenNotFoundError) {
+            return reply.code(404).send({ error: "Screen not found" });
+          }
+          throw error;
+        }
+        return { screenId, hidden: screenService.isHidden(screenId) };
       },
     );
 
@@ -509,7 +536,8 @@ export function adminRoutes(
         },
       },
       async (request, reply) => {
-        if (!screenService.isAvailable(request.params.screenId)) {
+        // Hidden screens can still be previewed while editing.
+        if (!screenService.listScreens().some((screen) => screen.id === request.params.screenId)) {
           return reply.code(404).send({ error: "Screen not found" });
         }
         const artifact = await screenService.getArtifact(request.params.screenId);

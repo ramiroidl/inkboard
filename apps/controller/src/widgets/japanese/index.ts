@@ -78,7 +78,7 @@ const ConfigSchema = Type.Object({
     ],
     { title: "Grammar focus" },
   ),
-  wordsPerScreen: Type.Integer({ minimum: 1, maximum: 3, title: "Words per screen" }),
+  wordsPerScreen: Type.Integer({ minimum: 1, maximum: 5, title: "Words per screen" }),
   vocabularyFrequency: Type.Union(
     [Type.Literal("daily", { title: "Daily" }), Type.Literal("hourly", { title: "Hourly" })],
     { title: "Change vocabulary" },
@@ -205,8 +205,9 @@ function text(
   size: number,
   width: number,
   bold = false,
+  anchor: "start" | "middle" = "start",
 ): string {
-  return `<text x="${x}" y="${y}" font-family="${FONT}" font-size="${size}"${bold ? ' font-weight="700"' : ""}>${escapeXml(fit(value, width, size))}</text>`;
+  return `<text x="${x}" y="${y}" font-family="${FONT}" font-size="${size}"${bold ? ' font-weight="700"' : ""}${anchor === "middle" ? ' text-anchor="middle"' : ""}>${escapeXml(fit(value, width, size))}</text>`;
 }
 
 function lines(
@@ -216,9 +217,10 @@ function lines(
   size: number,
   width: number,
   maxLines: number,
+  anchor: "start" | "middle" = "start",
 ): string {
   return wrapText(value, Math.max(1, Math.floor(width / (size * 0.65))), maxLines)
-    .map((line, index) => text(x, y + index * (size + 6), line, size, width))
+    .map((line, index) => text(x, y + index * (size + 6), line, size, width, false, anchor))
     .join("");
 }
 
@@ -291,14 +293,16 @@ export default defineWidget({
         );
       }
       for (const [index, word] of data.words.entries()) {
+        // Each card is centered in its column so both sides have the same margin.
+        const center = cellWidth / 2;
         const size = Math.min(
           compact ? 32 : 40,
           Math.max(18, Math.floor(cellWidth / Math.max(1, textWidth(word.word, 1)))),
         );
         const card = [
-          text(0, compact ? 35 : 42, word.word, size, cellWidth, true),
+          text(center, compact ? 35 : 42, word.word, size, cellWidth, true, "middle"),
           text(
-            0,
+            center,
             compact ? 64 : 75,
             word.reading,
             Math.min(
@@ -306,19 +310,29 @@ export default defineWidget({
               Math.max(14, Math.floor(cellWidth / Math.max(1, textWidth(word.reading, 1)))),
             ),
             cellWidth,
+            false,
+            "middle",
           ),
-          lines(0, compact ? 90 : 104, word.translation, compact ? 15 : 17, cellWidth, 2),
+          lines(
+            center,
+            compact ? 90 : 104,
+            word.translation,
+            compact ? 15 : 17,
+            cellWidth,
+            2,
+            "middle",
+          ),
         ];
         if (config.showRomaji && word.romaji) {
-          card.push(text(0, compact ? 137 : 151, word.romaji, 14, cellWidth));
+          card.push(text(center, compact ? 137 : 151, word.romaji, 14, cellWidth, false, "middle"));
         }
         if (config.mode === "vocabulary" && word.example) {
-          card.push(text(0, 194, word.example, 20, cellWidth));
+          card.push(text(center, 194, word.example, 20, cellWidth, false, "middle"));
           if (word.example_reading) {
-            card.push(text(0, 225, word.example_reading, 17, cellWidth));
+            card.push(text(center, 225, word.example_reading, 17, cellWidth, false, "middle"));
           }
           if (word.example_translation) {
-            card.push(lines(0, 256, word.example_translation, 16, cellWidth, 2));
+            card.push(lines(center, 256, word.example_translation, 16, cellWidth, 2, "middle"));
           }
         }
         parts.push(

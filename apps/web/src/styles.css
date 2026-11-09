@@ -652,3 +652,7 @@ select {
   box-sizing: border-box;
   height: 42px;
 }
+
+.screen-grid figure.hidden-screen img {
+  opacity: 0.45;
+}

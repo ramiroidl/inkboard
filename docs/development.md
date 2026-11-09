@@ -112,7 +112,7 @@ Widgets are plugins under `apps/controller/src/widgets/<type>/`. See
 - `GET|POST /api/v1/admin/screens`, `GET|PUT|DELETE /api/v1/admin/screens/:screenId`
 - `GET /api/v1/admin/screens/:screenId/preview.bmp`, `POST /api/v1/admin/screens/preview.bmp`
 - `PUT /api/v1/admin/rotation`, `PUT /api/v1/admin/schedules`, `PUT /api/v1/admin/quiet-hours`
-- `PUT /api/v1/admin/test-pattern`
+- `PUT /api/v1/admin/test-pattern`, `PUT /api/v1/admin/screens/:screenId/visibility`
 - `GET|PUT /api/v1/admin/calendars` (legacy selection API; widget instances own selections)
 - `GET /api/v1/admin/microsoft-todo`, `PUT .../settings`, `POST|DELETE .../sign-in`,
   `POST .../sign-out`, `GET|PUT .../lists`
