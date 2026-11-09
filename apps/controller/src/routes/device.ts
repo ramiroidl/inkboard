@@ -2,6 +2,7 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import {
+  batteryPercent,
   DEVICE_BUTTON_EVENTS,
   DEVICE_DISPLAY_RESULTS,
   DEVICE_WAKE_REASONS,
@@ -14,6 +15,7 @@ import { eq } from "drizzle-orm";
 import type { InkboardDatabase } from "../db/database.js";
 import { deviceCheckIns, devices } from "../db/schema.js";
 import { SettingsStore } from "../db/settings-store.js";
+import { batteryStep as batteryStepOf, drawBatteryBadge } from "../devices/battery-badge.js";
 import { DisplaySettings, invertBmpPixels, screenRevision } from "../devices/display-settings.js";
 import { ScreenIdSchema, type ScreenService } from "../screens/screen-service.js";
 
@@ -40,6 +42,24 @@ export function deviceRoutes(
       .from(devices)
       .where(eq(devices.id, deviceId))
       .get()?.currentScreenId ?? null;
+
+  /** How this display's image differs from the shared screen image. */
+  const variantFor = (
+    deviceId: string | null | undefined,
+  ): { inverted: boolean; batteryStep: number | null } => {
+    const options = displaySettings.get(deviceId);
+    let batteryStep: number | null = null;
+    if (options.showBattery && deviceId !== null && deviceId !== undefined) {
+      const voltage = database.orm
+        .select({ voltage: devices.lastBatteryVoltage })
+        .from(devices)
+        .where(eq(devices.id, deviceId))
+        .get()?.voltage;
+      const percent = batteryPercent(voltage);
+      batteryStep = percent === null ? null : batteryStepOf(percent);
+    }
+    return { inverted: options.invertColors, batteryStep };
+  };
 
   return async (app) => {
     app.get(
@@ -71,21 +91,24 @@ export function deviceRoutes(
         }
         const screenId = screenService.currentScreenForDevice(deviceId ?? null);
         const artifact = await screenService.getArtifact(screenId);
-        const inverted = displaySettings.invertColors(deviceId);
-        const revision = screenRevision(artifact.checksum, inverted);
+        const variant = variantFor(deviceId);
+        const revision = screenRevision(artifact.checksum, variant);
         const etag = `"${revision}"`;
         reply.header("X-Screen-Id", screenId);
         if (request.headers["if-none-match"] === etag) {
           return reply.code(304).send();
         }
 
-        const bmp = await readFile(artifact.filePath);
+        let bmp: Buffer = await readFile(artifact.filePath);
+        if (variant.batteryStep !== null) {
+          bmp = await drawBatteryBadge(bmp, variant.batteryStep);
+        }
         return reply
           .header("ETag", etag)
           .header("Cache-Control", "private, no-cache")
           .header("X-Screen-Revision", revision)
           .type("image/bmp")
-          .send(inverted ? invertBmpPixels(bmp) : bmp);
+          .send(variant.inverted ? invertBmpPixels(bmp) : bmp);
       },
     );
 
@@ -214,10 +237,7 @@ export function deviceRoutes(
           status: "ok" as const,
           serverTime: now,
           nextRefreshSeconds: screenService.nextRefreshSeconds(body.deviceId),
-          screenRevision: screenRevision(
-            artifact.checksum,
-            displaySettings.invertColors(body.deviceId),
-          ),
+          screenRevision: screenRevision(artifact.checksum, variantFor(body.deviceId)),
           screenId,
         };
       },

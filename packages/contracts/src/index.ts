@@ -199,6 +199,8 @@ export interface AdminDevice {
   currentScreenId: ScreenId;
   /** The controller flips this display's images, for panels that show white on black. */
   invertColors: boolean;
+  /** Draw the battery level in the lower-right corner of this display's images. */
+  showBattery: boolean;
 }
 
 export interface AdminDevicesResponse {
@@ -347,4 +349,44 @@ export interface InkboardBackupImportResult {
   screensReused: number;
   /** Settings that could not be applied, such as screens unavailable here. */
   warnings: string[];
+}
+
+/** Typical single-cell lithium battery voltage under light load, from empty to full. */
+const BATTERY_CURVE: readonly (readonly [number, number])[] = [
+  [3.3, 0],
+  [3.5, 5],
+  [3.6, 10],
+  [3.65, 20],
+  [3.7, 30],
+  [3.75, 40],
+  [3.8, 50],
+  [3.85, 60],
+  [3.95, 70],
+  [4.0, 80],
+  [4.1, 90],
+  [4.2, 100],
+];
+
+/** Estimated charge, 0–100, for a battery voltage; null when the voltage is unknown. */
+export function batteryPercent(voltage: number | null | undefined): number | null {
+  if (voltage === null || voltage === undefined || !Number.isFinite(voltage)) {
+    return null;
+  }
+  const first = BATTERY_CURVE[0]!;
+  const last = BATTERY_CURVE.at(-1)!;
+  if (voltage <= first[0]) {
+    return 0;
+  }
+  if (voltage >= last[0]) {
+    return 100;
+  }
+  for (let index = 1; index < BATTERY_CURVE.length; index += 1) {
+    const [upperVolts, upperPercent] = BATTERY_CURVE[index]!;
+    const [lowerVolts, lowerPercent] = BATTERY_CURVE[index - 1]!;
+    if (voltage <= upperVolts) {
+      const ratio = (voltage - lowerVolts) / (upperVolts - lowerVolts);
+      return Math.round(lowerPercent + ratio * (upperPercent - lowerPercent));
+    }
+  }
+  return 100;
 }

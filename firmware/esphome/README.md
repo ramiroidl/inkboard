@@ -100,10 +100,11 @@ with a multimeter before relying on it for precise battery-percentage estimates.
 
 ## Maintenance mode and deep sleep
 
-**Inkboard OG Maintenance Mode** is on by default and prevents deep sleep. Keep
-it on while developing or installing OTA updates. While it is on, the display
-checks the controller every 15 minutes so rotating screens and clocks stay
-current.
+**Inkboard OG Maintenance Mode** prevents deep sleep so the display stays
+reachable for OTA updates and logs. It is off after installing the firmware and
+turns itself off after 30 minutes (`maintenance_timeout`), because an awake
+display empties its battery in about a day. While it is on, the display checks
+the controller every 15 minutes so rotating screens and clocks stay current.
 
 When maintenance mode is switched off, the device finishes its current request,
 waits briefly, powers down the display interface, and sleeps. Each check-in

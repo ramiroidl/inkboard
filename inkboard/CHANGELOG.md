@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1
+
+- **Show battery** for each display: the battery level in the lower-right corner of the
+  screen, on by default. The display card shows the level next to the voltage.
+- Firmware 0.5.0 saves battery: maintenance mode is off after installing and turns itself
+  off after 30 minutes, and the display sleeps 5 seconds after a refresh instead of 20.
+  Install it from ESPHome Device Builder.
+
 ## 0.8.0
 
 - **Japanese Study** widget: curated N5/travel vocabulary, kana readings,

@@ -1,11 +1,15 @@
 substitutions:
   device_name: inkboard-og
   friendly_name: Inkboard OG
-  firmware_version: "0.4.0"
+  firmware_version: "0.5.0"
   sleep_duration: 15min
   awake_refresh_interval: 15min
-  sleep_delay: 20s
-  maintenance_restore_mode: RESTORE_DEFAULT_ON
+  # Time awake after a refresh before sleeping; long enough to finish the check-in.
+  sleep_delay: 5s
+  # Maintenance mode is off after flashing and turns itself off after this long, so a
+  # forgotten switch cannot keep the display awake until the battery is empty.
+  maintenance_restore_mode: RESTORE_DEFAULT_OFF
+  maintenance_timeout: 30min
   controller_url: !secret inkboard_controller_url
   device_api_token: !secret inkboard_device_api_token
 
@@ -21,6 +25,14 @@ esphome:
       then:
         - output.turn_on: display_enable
         - deep_sleep.prevent: deep_sleep_control
+    - priority: -200
+      then:
+        # A restored maintenance mode still times out.
+        - if:
+            condition:
+              switch.is_on: maintenance_mode
+            then:
+              - script.execute: maintenance_timeout
     - priority: -100
       then:
         - wait_until:
@@ -251,7 +263,9 @@ switch:
     entity_category: config
     turn_on_action:
       - deep_sleep.prevent: deep_sleep_control
+      - script.execute: maintenance_timeout
     turn_off_action:
+      - script.stop: maintenance_timeout
       - deep_sleep.allow: deep_sleep_control
       - script.execute: schedule_sleep
 
@@ -370,6 +384,13 @@ script:
                   level: ERROR
                   format: "Unable to report the device check-in"
       - lambda: id(pending_button_event) = "none";
+
+  - id: maintenance_timeout
+    mode: restart
+    then:
+      - delay: ${maintenance_timeout}
+      - logger.log: "Maintenance mode timed out; turning it off"
+      - switch.turn_off: maintenance_mode
 
   - id: schedule_sleep
     mode: restart

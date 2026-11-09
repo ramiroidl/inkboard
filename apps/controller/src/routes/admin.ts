@@ -266,6 +266,7 @@ export function adminRoutes(
                   lastDisplayResult: Type.String(),
                   currentScreenId: ScreenIdSchema,
                   invertColors: Type.Boolean(),
+                  showBattery: Type.Boolean(),
                 }),
               ),
             }),
@@ -289,7 +290,8 @@ export function adminRoutes(
             lastButtonEvent: device.lastButtonEvent,
             lastDisplayResult: device.lastDisplayResult,
             currentScreenId: screenService.resolveScreenId(device.currentScreenId),
-            invertColors: runtime.displaySettings.invertColors(device.id),
+            invertColors: runtime.displaySettings.get(device.id).invertColors,
+            showBattery: runtime.displaySettings.get(device.id).showBattery,
           })),
         };
       },
@@ -548,9 +550,19 @@ export function adminRoutes(
       {
         schema: {
           params: Type.Object({ deviceId: Type.String({ minLength: 1, maxLength: 64 }) }),
-          body: Type.Object({ invertColors: Type.Boolean() }, { additionalProperties: false }),
+          body: Type.Object(
+            {
+              invertColors: Type.Optional(Type.Boolean()),
+              showBattery: Type.Optional(Type.Boolean()),
+            },
+            { additionalProperties: false },
+          ),
           response: {
-            200: Type.Object({ deviceId: Type.String(), invertColors: Type.Boolean() }),
+            200: Type.Object({
+              deviceId: Type.String(),
+              invertColors: Type.Boolean(),
+              showBattery: Type.Boolean(),
+            }),
             404: ErrorSchema,
           },
         },
@@ -565,8 +577,7 @@ export function adminRoutes(
         if (known === undefined) {
           return reply.code(404).send({ error: "Device not found" });
         }
-        runtime.displaySettings.setInvertColors(deviceId, request.body.invertColors);
-        return { deviceId, invertColors: runtime.displaySettings.invertColors(deviceId) };
+        return { deviceId, ...runtime.displaySettings.update(deviceId, request.body) };
       },
     );
   };

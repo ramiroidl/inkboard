@@ -397,11 +397,19 @@ individual widgets.
 
 ## 6. Save battery
 
-While **Inkboard OG Maintenance Mode** is on (the default), the display stays
-awake so it can receive firmware updates, and checks for a new image every 15
-minutes. Once everything works, turn it **off** in Home Assistant: the display
-then sleeps between refreshes, waking when its next screen change is due (at
-most every 15 minutes, longer during quiet hours) or when you press a key.
+Between refreshes the display sleeps, waking when its next screen change is due
+(at most every 15 minutes, longer during quiet hours) or when you press a key.
+On a charged battery this lasts weeks.
+
+- **Maintenance Mode** keeps the display awake for firmware updates, which
+  empties the battery in about a day. It is off after installing the firmware
+  and turns itself off after 30 minutes.
+- Each screen change wakes the display and redraws the panel. A rotation every
+  5 minutes means 288 redraws a day; every 30 minutes means 48. Use a longer
+  interval, or a schedule, and quiet hours overnight.
+- **Show battery**, on the display's card on the Inkboard page, draws the
+  battery level in the lower-right corner of the screen. The card also shows
+  the level and voltage from the latest check-in.
 
 ## Update
 

@@ -10,6 +10,7 @@ import type {
   ScreenId,
   WidgetDescriptor,
 } from "@inkboard/contracts";
+import { batteryPercent } from "@inkboard/contracts";
 
 import { CalendarSettings } from "./CalendarSettings.js";
 import { DeviceSetup } from "./DeviceSetup.js";
@@ -130,11 +131,14 @@ export function App() {
     await reloadScreens();
   };
 
-  const setInvertColors = async (deviceId: string, invertColors: boolean) => {
+  const updateDisplay = async (
+    deviceId: string,
+    changes: Partial<Pick<AdminDevicesResponse["devices"][number], "invertColors" | "showBattery">>,
+  ) => {
     const response = await fetch(`api/v1/admin/devices/${encodeURIComponent(deviceId)}/display`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ invertColors }),
+      body: JSON.stringify(changes),
     });
     if (!response.ok) {
       setError(`Unable to update the display (${response.status})`);
@@ -142,7 +146,7 @@ export function App() {
     }
     setError(null);
     setDevices((current) =>
-      current.map((device) => (device.id === deviceId ? { ...device, invertColors } : device)),
+      current.map((device) => (device.id === deviceId ? { ...device, ...changes } : device)),
     );
   };
 
@@ -238,7 +242,7 @@ export function App() {
                       <dd>
                         {device.lastBatteryVoltage === null
                           ? "Unknown"
-                          : `${device.lastBatteryVoltage.toFixed(2)} V`}
+                          : `${batteryPercent(device.lastBatteryVoltage)}% (${device.lastBatteryVoltage.toFixed(2)} V)`}
                       </dd>
                     </div>
                     <div>
@@ -264,8 +268,23 @@ export function App() {
                   <label className="inline-field">
                     <input
                       type="checkbox"
+                      checked={device.showBattery}
+                      onChange={(event) =>
+                        void updateDisplay(device.id, { showBattery: event.target.checked })
+                      }
+                    />
+                    Show battery
+                  </label>
+                  <small className="hint">
+                    Draws the battery level in the lower-right corner of this display.
+                  </small>
+                  <label className="inline-field">
+                    <input
+                      type="checkbox"
                       checked={device.invertColors}
-                      onChange={(event) => void setInvertColors(device.id, event.target.checked)}
+                      onChange={(event) =>
+                        void updateDisplay(device.id, { invertColors: event.target.checked })
+                      }
                     />
                     Invert colors
                   </label>

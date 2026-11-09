@@ -150,7 +150,7 @@ describe("controller", () => {
       status: "ok",
       nextRefreshSeconds: 900,
     });
-    expect(checkInBody.screenRevision).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(checkInBody.screenRevision).toMatch(/^sha256:[a-f0-9]{64}:battery\d+$/);
 
     const devices = await app.inject({
       method: "GET",
