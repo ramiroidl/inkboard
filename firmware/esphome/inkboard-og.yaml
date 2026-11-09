@@ -1,7 +1,7 @@
 substitutions:
   device_name: inkboard-og
   friendly_name: Inkboard OG
-  firmware_version: "0.5.1"
+  firmware_version: "0.6.0"
   sleep_duration: 15min
   awake_refresh_interval: 15min
   # Time awake after a refresh before sleeping; long enough to finish the check-in.
@@ -10,6 +10,10 @@ substitutions:
   # forgotten switch cannot keep the display awake until the battery is empty.
   maintenance_restore_mode: RESTORE_DEFAULT_OFF
   maintenance_timeout: 30min
+  # Status icons drawn over the last screen when the controller cannot be reached.
+  offline_wifi: "1"
+  offline_controller: "2"
+  frame_bytes: "48000"
   controller_url: !secret inkboard_controller_url
   device_api_token: !secret inkboard_device_api_token
 
@@ -27,6 +31,9 @@ esphome:
         - deep_sleep.prevent: deep_sleep_control
     - priority: -200
       then:
+        - globals.set:
+            id: boot_complete
+            value: "true"
         - script.execute: awake_guard
         # A restored maintenance mode still times out.
         - if:
@@ -55,12 +62,16 @@ esphome:
                         id: request_screen
                         action: !lambda return id(pending_button_event);
                   else:
-                    - logger.log: "Wi-Fi and telemetry are ready; requesting the latest image"
-                    - component.update: controller_image
+                    - logger.log: "Wi-Fi and telemetry are ready; checking for a new image"
+                    - script.execute: fetch_image
             else:
               - logger.log:
                   level: ERROR
                   format: "Wi-Fi did not connect before the image request timeout"
+              - script.execute:
+                  id: show_offline
+                  reason: ${offline_wifi}
+              - script.wait: show_offline
               - script.execute: schedule_sleep
 
 esp32:
@@ -133,7 +144,11 @@ image:
             - script.execute: schedule_sleep
           else:
             - logger.log: "Downloaded a new image; refreshing the panel"
+            - globals.set:
+                id: offline_reason
+                value: "0"
             - component.update: epaper_display
+            - script.execute: save_frame
             - delay: 7s
             - script.execute:
                 id: send_check_in
@@ -144,6 +159,11 @@ image:
       - logger.log:
           level: ERROR
           format: "Unable to download the Inkboard image"
+      - lambda: id(last_etag)[0] = '\0';
+      - script.execute:
+          id: show_offline
+          reason: ${offline_controller}
+      - script.wait: show_offline
       - script.execute:
           id: send_check_in
           display_result: "download_failed"
@@ -162,8 +182,62 @@ display:
       inverted: true
     update_interval: never
     lambda: |-
-      it.image(0, 0, id(controller_image), Color::BLACK, Color::WHITE);
-
+      if (id(offline_reason) == 0) {
+        it.image(0, 0, id(controller_image), Color::BLACK, Color::WHITE);
+        return;
+      }
+      // Offline: redraw the last screen saved in flash, then a status icon by the battery.
+      it.fill(Color::WHITE);
+      auto *frame = new (std::nothrow) std::array<uint8_t, ${frame_bytes}>();
+      if (frame != nullptr) {
+        auto pref = global_preferences->make_preference<std::array<uint8_t, ${frame_bytes}>>(
+            fnv1_hash("inkboard_frame"));
+        if (pref.load(frame)) {
+          for (int y = 0; y < 480; y++) {
+            const uint8_t *row = frame->data() + y * 100;
+            for (int x = 0; x < 800; x++) {
+              if (row[x >> 3] & (0x80 >> (x & 7))) {
+                it.draw_pixel_at(x, y, Color::BLACK);
+              }
+            }
+          }
+        }
+        delete frame;
+      }
+      // Icon box sits left of the battery badge, at the badge's height.
+      const int left = 660, top = 455, w = 26, h = 22;
+      it.filled_rectangle(left - 2, top - 1, w + 4, h + 2, Color::WHITE);
+      const int cx = left + w / 2, cy = top + h - 2;
+      if (id(offline_reason) == ${offline_wifi}) {
+        // Wi-Fi arcs with a slash.
+        for (int y = top; y < top + h; y++) {
+          for (int x = left; x < left + w; x++) {
+            const int dx = x - cx, dy = cy - y;
+            if (dy < 0 || std::abs(dx) > dy) continue;
+            const float r = std::sqrt(float(dx * dx + dy * dy));
+            if (r <= 2.6f || std::fabs(r - 7.0f) <= 1.4f || std::fabs(r - 12.0f) <= 1.4f ||
+                std::fabs(r - 17.0f) <= 1.4f) {
+              it.draw_pixel_at(x, y, Color::BLACK);
+            }
+          }
+        }
+        for (int y = top; y < top + h; y++) {
+          const int x = left + (y - top) * w / h;
+          it.draw_pixel_at(x - 1, y, Color::WHITE);
+          it.draw_pixel_at(x, y, Color::BLACK);
+          it.draw_pixel_at(x + 1, y, Color::BLACK);
+        }
+      } else {
+        // Warning triangle: Wi-Fi works but the controller did not answer.
+        for (int y = top; y < top + h; y++) {
+          const int half = (y - top) * 12 / h;
+          for (int x = cx - half; x <= cx + half; x++) {
+            if (y >= top + h - 2 || std::abs(x - cx) > half - 2) it.draw_pixel_at(x, y, Color::BLACK);
+          }
+        }
+        it.filled_rectangle(cx - 1, top + 7, 3, 7, Color::BLACK);
+        it.filled_rectangle(cx - 1, top + 16, 3, 2, Color::BLACK);
+      }
 binary_sensor:
   - platform: gpio
     id: key_previous
@@ -268,7 +342,13 @@ switch:
     turn_off_action:
       - script.stop: maintenance_timeout
       - deep_sleep.allow: deep_sleep_control
-      - script.execute: schedule_sleep
+      # Restoring the switch at boot also runs this action; only sleep after a real change,
+      # otherwise every wake would sleep before Wi-Fi connects and the panel refreshes.
+      - if:
+          condition:
+            lambda: return id(boot_complete);
+          then:
+            - script.execute: schedule_sleep
 
 sensor:
   - platform: wifi_signal
@@ -293,6 +373,29 @@ text_sensor:
     name: "${friendly_name} ESPHome Version"
 
 globals:
+  # What the panel is drawing: 0 for the controller image, otherwise an offline reason.
+  - id: offline_reason
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+  # The offline icon already on the panel, kept across deep sleep so an outage redraws once.
+  - id: offline_shown
+    type: int
+    restore_value: true
+    initial_value: "0"
+
+  # ETag of the image on the panel, kept across deep sleep so unchanged screens are skipped.
+  - id: last_etag
+    type: std::array<char, 128>
+    restore_value: true
+    initial_value: "std::array<char, 128>{}"
+
+  - id: boot_complete
+    type: bool
+    restore_value: false
+    initial_value: "false"
+
   - id: wake_reason
     type: std::string
     restore_value: false
@@ -321,6 +424,12 @@ script:
       action: string
     then:
       - lambda: id(pending_button_event) = action;
+      # A key that wakes the display is still held when its sensor starts, before Wi-Fi
+      # connects; requesting immediately would fail and send the display back to sleep.
+      - wait_until:
+          condition:
+            wifi.connected:
+          timeout: 30s
       - script.execute: sample_battery
       - script.wait: sample_battery
       - script.execute:
@@ -328,7 +437,124 @@ script:
           display_result: "button"
           button_event: !lambda return action;
       - script.wait: send_check_in
-      - component.update: controller_image
+      # A key always redraws, even when the screen did not change.
+      - lambda: id(last_etag)[0] = '\0';
+      - script.execute: fetch_image
+
+  # Asks for the image with the ETag on the panel. An unchanged screen (304) skips the
+  # download and the panel refresh; otherwise online_image downloads and draws it.
+  - id: fetch_image
+    mode: single
+    then:
+      - http_request.get:
+          url: "${controller_url}/api/v1/device/image.bmp?device=${device_name}"
+          request_headers:
+            Authorization: "Bearer ${device_api_token}"
+            If-None-Match: !lambda return id(last_etag).data();
+          collect_headers:
+            - etag
+          on_response:
+            then:
+              - if:
+                  condition:
+                    lambda: return response->status_code == 304;
+                  then:
+                    - logger.log: "Screen is unchanged; skipping the panel refresh"
+                    - globals.set:
+                        id: offline_shown
+                        value: "0"
+                    - script.execute:
+                        id: send_check_in
+                        display_result: "not_modified"
+                        button_event: !lambda return id(pending_button_event);
+                    - script.execute: schedule_sleep
+                  else:
+                    - if:
+                        condition:
+                          lambda: return response->status_code == 200;
+                        then:
+                          - lambda: |-
+                              std::string etag = response->get_response_header("etag");
+                              auto &stored = id(last_etag);
+                              const size_t length = std::min(etag.size(), stored.size() - 1);
+                              std::copy_n(etag.begin(), length, stored.begin());
+                              stored[length] = '\0';
+                          - component.update: controller_image
+                        else:
+                          - logger.log:
+                              level: ERROR
+                              format: "Controller image request returned HTTP %d"
+                              args:
+                                - response->status_code
+                          - lambda: id(last_etag)[0] = '\0';
+                          - script.execute:
+                              id: show_offline
+                              reason: ${offline_controller}
+                          - script.wait: show_offline
+                          - script.execute:
+                              id: send_check_in
+                              display_result: "download_failed"
+                              button_event: !lambda return id(pending_button_event);
+                          - script.execute: schedule_sleep
+          on_error:
+            then:
+              - logger.log:
+                  level: ERROR
+                  format: "Unable to reach the controller"
+              - lambda: id(last_etag)[0] = '\0';
+              - script.execute:
+                  id: show_offline
+                  reason: !lambda |-
+                    return wifi::global_wifi_component->is_connected() ? ${offline_controller}
+                                                                       : ${offline_wifi};
+              - script.wait: show_offline
+              - script.execute:
+                  id: send_check_in
+                  display_result: "download_failed"
+                  button_event: !lambda return id(pending_button_event);
+              - script.execute: schedule_sleep
+
+  # Keeps the drawn screen in flash so an outage can redraw it with a status icon.
+  - id: save_frame
+    mode: single
+    then:
+      - lambda: |-
+          auto *image = id(controller_image);
+          const uint8_t *data = image->get_data_start();
+          if (data == nullptr || image->get_width() != 800 || image->get_height() != 480 ||
+              image->get_bpp() != 1) {
+            ESP_LOGW("inkboard", "Image is not an 800x480 bitmap; not saving it");
+            return;
+          }
+          auto pref = global_preferences->make_preference<std::array<uint8_t, ${frame_bytes}>>(
+              fnv1_hash("inkboard_frame"));
+          pref.save(reinterpret_cast<const std::array<uint8_t, ${frame_bytes}> *>(data));
+          id(offline_shown) = 0;
+
+  # Redraws the saved screen with an offline icon, once per outage and reason.
+  - id: show_offline
+    mode: single
+    parameters:
+      reason: int
+    then:
+      - if:
+          condition:
+            lambda: return id(offline_shown) != reason;
+          then:
+            - logger.log:
+                format: "Showing offline status %d"
+                args:
+                  - reason
+            - globals.set:
+                id: offline_reason
+                value: !lambda return reason;
+            - component.update: epaper_display
+            - globals.set:
+                id: offline_reason
+                value: "0"
+            - globals.set:
+                id: offline_shown
+                value: !lambda return reason;
 
   - id: send_check_in
     mode: queued
@@ -471,4 +697,4 @@ interval:
             - lambda: id(pending_button_event) = "none";
             - script.execute: sample_battery
             - script.wait: sample_battery
-            - component.update: controller_image
+            - script.execute: fetch_image

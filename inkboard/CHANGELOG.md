@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.5
+
+- Firmware 0.6.0 shows connection problems: when a wake cannot reach Wi-Fi or the
+  controller, the display redraws the last screen with a status icon next to the battery
+  badge. The firmware now keeps the screen's ETag across deep sleep, so unchanged screens
+  no longer trigger a full panel refresh on every wake.
+- Firmware 0.6.0 also fixes displays that still slept about 5 seconds after waking.
+  Restoring the maintenance mode switch at boot ran its "off" action, which scheduled
+  deep sleep before Wi-Fi connected. Keys work from sleep again: the key that woke the
+  display requested its screen before Wi-Fi connected, failed, and put the display back
+  to sleep. Install the updated `inkboard-og.yaml` from ESPHome Device Builder.
+
 ## 0.8.4
 
 - The battery badge no longer hides the "1" of "100%" under the battery icon.

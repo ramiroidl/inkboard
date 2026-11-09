@@ -115,6 +115,23 @@ records the wake reason, refreshes/checks in, and returns to sleep. A
 two-minute awake-time guard prevents a failed network request from draining the
 battery indefinitely.
 
+The firmware remembers the ETag of the image on the panel across deep sleep and
+sends it with each request. When the screen has not changed, the controller
+answers `304 Not Modified` and the panel is not refreshed, which saves most of
+the battery a wake would otherwise use.
+
+## Offline status
+
+After each refresh the firmware keeps a copy of the screen in flash. When a wake
+cannot reach the controller, it redraws that screen once with a status icon to
+the left of the battery badge, then sleeps as usual:
+
+- a Wi-Fi symbol with a slash when Wi-Fi did not connect;
+- a warning triangle when Wi-Fi works but the controller did not answer.
+
+The icon stays until the next successful refresh, which removes it. Later failed
+wakes do not redraw the panel again unless the reason changes.
+
 To recover OTA access while sleep is enabled, press any key and begin the
 wireless installation while the device is awake. If that window is too short,
 use the BOOT/RESET USB recovery procedure.
